@@ -23,5 +23,6 @@ async def health_db() -> dict[str, str]:
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         raise HTTPException(
-            status_code=503, detail={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+            status_code=503,
+            detail={"status": "unhealthy", "database": "disconnected", "error": str(e)},
         )
