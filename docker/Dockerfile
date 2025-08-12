@@ -1,12 +1,15 @@
-FROM python:3.12-slim
+FROM astral/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 
 COPY pyproject.toml .
 
-RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --no-dev --no-interaction --no-ansi
+# Install deps into a local venv at /app/.venv
+RUN uv sync
+
+# Make that venv the default for all processes
+# ENV VIRTUAL_ENV=/app/.venv
+# ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 COPY . .
 
