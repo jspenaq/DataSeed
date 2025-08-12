@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_DB: dataseed_dev
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: DataSeed_DB
+      POSTGRES_USER: DataSeed
+      POSTGRES_PASSWORD: dev_password
     ports:
       - "5432:5432"
     volumes:
@@ -25,40 +25,40 @@ services:
       - db
       - redis
     environment:
-      - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
+      - DATABASE_URL=postgresql://DataSeed:dev_password@db/DataSeed_DB
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       - ../:/app
 
-  worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info
-    depends_on:
-      - db
-      - redis
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    volumes:
-      - ../:/app
+  # worker:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile
+  #   command: celery -A app.workers.celery_app worker --loglevel=info
+  #   depends_on:
+  #     - db
+  #     - redis
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
+  #     - CELERY_BROKER_URL=redis://redis:6379/0
+  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
+  #   volumes:
+  #     - ../:/app
 
-  dashboard:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: streamlit run dashboard/main.py
-    ports:
-      - "8501:8501"
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
-    volumes:
-      - ../:/app
+  # dashboard:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile
+  #   command: streamlit run dashboard/main.py
+  #   ports:
+  #     - "8501:8501"
+  #   depends_on:
+  #     - db
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
+  #   volumes:
+  #     - ../:/app
 
 volumes:
   postgres_data:
