@@ -1,0 +1,29 @@
+sources:
+  - name: hackernews
+    type: api
+    base_url: "https://hacker-news.firebaseio.com/v0"
+    rate_limit: 600
+    config:
+      items_endpoint: "/topstories.json"
+      detail_endpoint: "/item/{id}.json"
+  - name: reddit
+    type: api
+    base_url: "https://oauth.reddit.com"
+    rate_limit: 60
+    config:
+      subreddit: "all"
+      client_id: "${REDDIT_CLIENT_ID}"
+      client_secret: "${REDDIT_CLIENT_SECRET}"
+  - name: github
+    type: api
+    base_url: "https://api.github.com"
+    rate_limit: 5000
+    config:
+      search_endpoint: "/search/repositories"
+      token: "${GITHUB_TOKEN}"
+  - name: producthunt
+    type: api
+    base_url: "https://api.producthunt.com/v2"
+    rate_limit: 500
+    config:
+      token: "${PRODUCTHUNT_TOKEN}"

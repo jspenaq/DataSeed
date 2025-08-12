@@ -7,7 +7,21 @@ authors = [
     { name = "Juan Sebastian Peña", email = "jspenaq@unal.edu.co" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "alembic>=1.16.4",
+    "asyncpg>=0.30.0",
+    "celery>=5.5.3",
+    "fastapi>=0.116.1",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "psycopg2-binary>=2.9.10",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.1",
+    "redis>=6.4.0",
+    "sqlalchemy>=2.0.43",
+    "streamlit>=1.48.0",
+    "uvicorn>=0.35.0",
+]
 
 [dependency-groups]
 dev = [
@@ -15,13 +29,6 @@ dev = [
     "pytest>=8.4.1",
     "ruff>=0.12.8",
 ]
-
-[project.scripts]
-dataseed = "dataseed:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 # Ruff configuration
 
