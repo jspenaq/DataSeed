@@ -1,4 +1,5 @@
-FROM astral/uv:python3.12-bookworm-slim
+FROM python:3.12-slim-bookworm
+COPY --from=docker.io/astral/uv:latest /uv /uvx /bin/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -21,5 +22,4 @@ COPY . .
 
 EXPOSE 8000
 
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,8 +1,9 @@
 from typing import List, Optional
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://DataSeed:dev_password@DataSeed_DB/dataseed_dev"
+    DATABASE_URL: str = "postgresql+asyncpg://DataSeed:dev_password@db/DataSeed_DB"
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
     REDDIT_CLIENT_ID: Optional[str] = None
@@ -16,5 +17,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+
 
 settings = Settings()
