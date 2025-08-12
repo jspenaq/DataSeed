@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
-from pydantic import BaseModel, ValidationError
 from loguru import logger
+from pydantic import BaseModel, ValidationError
 
 from app.core.extractors.base import RawItem
 from app.schemas.items import ContentItemCreate

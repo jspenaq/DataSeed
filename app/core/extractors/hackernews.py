@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
@@ -157,7 +157,7 @@ class HackerNewsExtractor(BaseExtractor):
                 return None
 
             # Convert timestamp to datetime
-            published_at = datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
+            published_at = datetime.fromtimestamp(float(timestamp), tz=UTC)
 
             # Get URL (prefer actual URL over HN discussion URL)
             url = item_data.get("url")

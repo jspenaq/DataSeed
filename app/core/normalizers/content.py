@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any
 
 from loguru import logger
@@ -39,7 +38,9 @@ class HackerNewsNormalizer(ContentNormalizer):
             raise NormalizationError(f"HackerNews normalization failed: {e}", raw_item.external_id, e)
 
     def _apply_hackernews_transformations(
-        self, normalized_item: ContentItemCreate, raw_item: RawItem
+        self,
+        normalized_item: ContentItemCreate,
+        raw_item: RawItem,
     ) -> ContentItemCreate:
         """
         Apply HackerNews-specific transformations to the normalized item.
