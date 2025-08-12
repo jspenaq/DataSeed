@@ -1,0 +1,52 @@
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class ContentItemBase(BaseModel):
+    """Base schema for ContentItem with common fields."""
+
+    external_id: str = Field(description="Source's unique identifier for the item")
+    title: str = Field(description="Normalized title text")
+    content: str | None = Field(default=None, description="Main text content/description")
+    url: str = Field(description="Original URL of the item")
+    score: int | None = Field(default=None, description="Upvotes/likes/stars")
+    published_at: datetime = Field(description="When the item was originally published")
+
+
+class ContentItemCreate(ContentItemBase):
+    """Schema for creating a new ContentItem."""
+
+    source_id: int = Field(description="Reference to the data source")
+
+
+class ContentItemResponse(ContentItemBase):
+    """Schema for ContentItem API responses."""
+
+    id: int = Field(description="Internal database ID")
+    source_id: int = Field(description="Reference to the data source")
+    created_at: datetime = Field(description="When the item was created in our system")
+    updated_at: datetime = Field(description="When the item was last updated in our system")
+
+    class Config:
+        from_attributes = True
+
+
+class ContentItemUpdate(BaseModel):
+    """Schema for updating a ContentItem."""
+
+    title: str | None = None
+    content: str | None = None
+    url: str | None = None
+    score: int | None = None
+    published_at: datetime | None = None
+
+
+class PaginatedContentItems(BaseModel):
+    """Schema for paginated ContentItem responses."""
+
+    total: int = Field(description="Total number of items")
+    limit: int = Field(description="Number of items per page")
+    offset: int = Field(description="Offset from the start")
+    items: list[ContentItemResponse] = Field(description="List of content items")

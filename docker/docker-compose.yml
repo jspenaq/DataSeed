@@ -54,7 +54,7 @@ services:
       - db
       - redis
     environment:
-      - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
+      - DATABASE_URL=postgresql+asyncpg://DataSeed:dev_password@db/DataSeed_DB
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
