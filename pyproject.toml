@@ -9,9 +9,69 @@ authors = [
 requires-python = ">=3.12"
 dependencies = []
 
+[dependency-groups]
+dev = [
+    "coverage>=7.10.3",
+    "pytest>=8.4.1",
+    "ruff>=0.12.8",
+]
+
 [project.scripts]
 dataseed = "dataseed:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# Ruff configuration
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "Q",  # flake8-quotes
+    "S",  # flake8-bandit
+    "B",  # flake8-bugbear
+    "UP",  # pyupgrade
+    "TC",  # flake8-type-checking
+    "TD",  # flake8-todos
+    "C4",  # flake8-comprehensions
+    "ISC", # flake8-implicit-str-concat
+    "ANN",  # flake8-annotations
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "COM",  # flake8-commas
+    "ICN",  # flake8-import-conventions
+    "TID",  # flake8-tidy-imports
+    "PTH",  # flake8-use-pathlib
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ANN001", "ANN201", "ANN202", "E402", "E501", "E711"]
+
+
+# Coverage configuration
+
+[tool.coverage.run]
+branch = true
+source = [
+    "dataseed",  # Include the dataseed package
+]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+omit = [
+    "tests/*",  # Exclude all test files
+    "*/__init__.py",  # Exclude __init__.py files
+]
+
+show_missing = true
+
+[tool.coverage.html]
+directory = "coverage_html_report"
+
