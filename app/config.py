@@ -2,7 +2,7 @@ from typing import List, Optional
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+psycopg://DataSeed:dev_password@DataSeed_DB/dataseed_dev"
+    DATABASE_URL: str = "postgresql://DataSeed:dev_password@DataSeed_DB/dataseed_dev"
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
     REDDIT_CLIENT_ID: Optional[str] = None
