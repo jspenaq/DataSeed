@@ -45,34 +45,39 @@ services:
     - ../scripts:/app/scripts
     - ../.env:/app/.env
 
-  # worker:
-  #   build:
-  #     context: ..
-  #     dockerfile: docker/Dockerfile
-  #   command: celery -A app.workers.celery_app worker --loglevel=info
-  #   depends_on:
-  #     - db
-  #     - redis
-  #   environment:
-  #     - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
-  #     - CELERY_BROKER_URL=redis://redis:6379/0
-  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
-  #   volumes:
-  #     - ../:/app
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["uv", "run", "celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ../app:/app/app
+      - ../config:/app/config
+      - ../scripts:/app/scripts
+      - ../.env:/app/.env
 
-  # dashboard:
-  #   build:
-  #     context: ..
-  #     dockerfile: docker/Dockerfile
-  #   command: streamlit run dashboard/main.py
-  #   ports:
-  #     - "8501:8501"
-  #   depends_on:
-  #     - db
-  #   environment:
-  #     - DATABASE_URL=postgresql+asyncpg://user:password@db/dataseed_dev
-  #   volumes:
-  #     - ../:/app
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["uv", "run", "streamlit", "run", "dashboard/main.py", "--server.address", "0.0.0.0"]
+    ports:
+      - "8501:8501"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://DataSeed:dev_password@db/DataSeed_DB
+    volumes:
+    - ../dashboard:/app/dashboard
+    - ../config:/app/config
+    - ../.env:/app/.env
 
 volumes:
   postgres_data:

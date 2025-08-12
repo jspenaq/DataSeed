@@ -1,4 +1,4 @@
 import streamlit as st
 
-st.title("DataSeed")
-st.success("Dashboard up")
+st.title("DataSeed - Development Mode")  # Change the title
+st.success("Dashboard up and running with hot reload!")
