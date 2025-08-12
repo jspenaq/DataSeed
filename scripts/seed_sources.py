@@ -8,27 +8,29 @@ with their proper API endpoints and rate limits. It's idempotent and can be run 
 
 import sys
 from pathlib import Path
+from typing import Any
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.models.base import Base
 from app.models.source import Source
 
 
-def create_sync_engine():
+def create_sync_engine() -> Engine:
     """Create a synchronous database engine for seeding."""
     # Convert async URL to sync URL
     sync_url = settings.DATABASE_URL.replace("+asyncpg", "")
     return create_engine(sync_url, echo=True)
 
 
-def get_sources_data():
+def get_sources_data() -> list[dict[str, Any]]:
     """Return the sources data to be seeded."""
     return [
         {
@@ -70,7 +72,7 @@ def get_sources_data():
     ]
 
 
-def seed_sources(session):
+def seed_sources(session: Session) -> None:
     """
     Seed the sources table with initial data.
 
@@ -83,9 +85,10 @@ def seed_sources(session):
 
     for source_data in sources_data:
         # Check if source already exists
-        existing_source = session.execute(select(Source).where(Source.name == source_data["name"])).scalar_one_or_none()
+        existing_source = session.execute(select(Source).where(Source.name == source_data["name"]))
+        existing = existing_source.scalar_one_or_none()
 
-        if existing_source:
+        if existing:
             print(f"Source '{source_data['name']}' already exists, skipping...")
             continue
 
@@ -99,19 +102,19 @@ def seed_sources(session):
     print("Sources seeding completed successfully!")
 
 
-def main():
+def main() -> None:
     """Main function to run the seeding process."""
     print("Starting sources seeding process...")
 
     # Create engine and session
     engine = create_sync_engine()
-    SessionLocal = sessionmaker(bind=engine)
+    session_local = sessionmaker(bind=engine)
 
     # Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
 
     # Seed sources
-    with SessionLocal() as session:
+    with session_local() as session:
         try:
             seed_sources(session)
         except Exception as e:
