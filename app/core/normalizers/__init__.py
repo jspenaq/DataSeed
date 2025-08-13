@@ -7,11 +7,11 @@ from app.core.normalizers.base import (
 )
 from app.core.normalizers.content import (
     GenericContentNormalizer,
-    GitHubNormalizer,
     HackerNewsNormalizer,
     ProductHuntNormalizer,
     RedditNormalizer,
 )
+from app.core.normalizers.github import GitHubNormalizer
 
 __all__ = [
     "BaseNormalizer",
