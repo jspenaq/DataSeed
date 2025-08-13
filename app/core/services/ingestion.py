@@ -6,10 +6,11 @@ including idempotent batch operations and comprehensive run tracking.
 """
 
 import logging
+from datetime import timezone
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import case, func, select, text
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class IngestionService:
     """Service for handling data ingestion operations with proper tracking."""
 
-    def __init__(self, db_session: AsyncSession):
+    def __init__(self, db_session: AsyncSession) -> None:
         self.db = db_session
 
     async def batch_upsert_items(
@@ -59,8 +60,8 @@ class IngestionService:
             items_data = []
             for item in items:
                 item_dict = item.model_dump()
-                item_dict["created_at"] = datetime.utcnow()
-                item_dict["updated_at"] = datetime.utcnow()
+                item_dict["created_at"] = datetime.now(timezone.utc)
+                item_dict["updated_at"] = datetime.now(timezone.utc)
                 items_data.append(item_dict)
 
             # Build the upsert statement
@@ -117,19 +118,17 @@ class IngestionService:
             # Count existing items that match our upsert criteria
             source_external_pairs = [(item["source_id"], item["external_id"]) for item in items_data]
 
-            # Build a query to count existing items
-            conditions = []
-            for source_id, external_id in source_external_pairs:
-                conditions.append(f"(source_id = {source_id} AND external_id = '{external_id}')")
+            # Build a query to count existing items securely using SQLAlchemy expressions
+            from app.models.items import ContentItem
 
-            if conditions:
-                query = text(f"""
-                    SELECT COUNT(*) as existing_count
-                    FROM items 
-                    WHERE {" OR ".join(conditions)}
-                """)
+            if source_external_pairs:
+                conditions = [
+                    and_(ContentItem.source_id == source_id, ContentItem.external_id == external_id)
+                    for source_id, external_id in source_external_pairs
+                ]
+                stmt = select(func.count().label("existing_count")).select_from(ContentItem).where(or_(*conditions))
 
-                result = await self.db.execute(query)
+                result = await self.db.execute(stmt)
                 existing_count = result.scalar() or 0
 
                 # Approximate calculation
@@ -159,7 +158,7 @@ class IngestionService:
             SQLAlchemyError: If database operation fails
         """
         if started_at is None:
-            started_at = datetime.utcnow()
+            started_at = datetime.now(timezone.utc)
 
         logger.info(f"Creating ingestion run for source_id={source_id}")
 
@@ -254,7 +253,7 @@ class IngestionService:
 
             # Auto-set completed_at if status indicates completion
             if status in ("completed", "failed") and completed_at is None:
-                completed_at = datetime.utcnow()
+                completed_at = datetime.now(timezone.utc)
 
             if completed_at is not None:
                 ingestion_run.completed_at = completed_at
@@ -308,7 +307,7 @@ class IngestionService:
             errors_count=errors_count,
             error_notes=error_notes,
             notes=notes,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc),
         )
 
     async def get_ingestion_runs(
@@ -395,7 +394,7 @@ class IngestionService:
         """
         try:
             # Base query for recent runs
-            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
             stmt = select(
                 func.count(IngestionRun.id).label("total_runs"),
