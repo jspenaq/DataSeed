@@ -22,21 +22,23 @@ from app.core.registry import register_extractor
 class GitHubExtractor(BaseExtractor):
     """
     Extractor for GitHub API data.
-    
+
     Fetches trending repositories, releases, and project information from GitHub's
     REST API. Handles rate limiting and authentication through the base HTTP client.
     """
 
-    def __init__(self, config: ExtractorConfig, http_client: RateLimitedClient | None = None, source_id: int | None = None):
+    def __init__(
+        self, config: ExtractorConfig, http_client: RateLimitedClient | None = None, source_id: int | None = None
+    ):
         super().__init__(config)
         self.http_client = http_client or self.get_http_client()
         # Get GitHub token from configuration
         self.token = self.extractor_config.get("token")
         self.search_endpoint = self.extractor_config.get("search_endpoint", "/search/repositories")
-        
+
         # Read mode from config, defaulting to "search"
         self.mode = self.extractor_config.get("mode", "search")
-        
+
         # If mode is "releases", read repositories list from config
         if self.mode == "releases":
             self.repositories = self.extractor_config.get("repositories")
@@ -45,33 +47,35 @@ class GitHubExtractor(BaseExtractor):
                 raise ValueError("Releases mode requires 'repositories' list in config")
         else:
             self.repositories = None
-        
+
         # Initialize normalizer if source_id is provided
         if source_id is not None:
             from app.core.registry import get_normalizer
+
             self.normalizer = get_normalizer("github", source_id)
         else:
             self.normalizer = None
-        
+
         # Initialize Redis client for ETag caching
         self.redis: redis.Redis | None = None
-        
+
         # Add default headers for GitHub API
-        if http_client is None:
-            self.http_client.default_headers.update({
+        self.http_client.default_headers.update(
+            {
                 "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "DataSeed/1.0 (https://github.com/jspenaq/dataseed)"
-            })
-            if self.token:
-                self.http_client.default_headers["Authorization"] = f"token {self.token}"
+                "User-Agent": "DataSeed/1.0 (https://github.com/jspenaq/dataseed)",
+            }
+        )
+        if self.token:
+            self.http_client.default_headers["Authorization"] = f"Bearer {self.token}"
 
     def _get_cache_key(self, url: str) -> str:
         """
         Generate a unique Redis key for a given API request URL.
-        
+
         Args:
             url: The API request URL
-            
+
         Returns:
             A unique cache key for the URL
         """
@@ -81,7 +85,7 @@ class GitHubExtractor(BaseExtractor):
     async def _get_redis_client(self) -> redis.Redis:
         """
         Get or initialize the Redis client.
-        
+
         Returns:
             Redis client instance
         """
@@ -113,27 +117,28 @@ class GitHubExtractor(BaseExtractor):
         Fetch repositories using search mode with conditional requests using ETags.
         """
         logger.info(f"Fetching recent GitHub repositories (limit: {limit}, since: {since})")
-        
+
         try:
             # Format the since datetime for GitHub API query
             if since is None:
                 # Default to last 24 hours if no since date provided
                 from datetime import timedelta
+
                 since = datetime.now() - timedelta(days=1)
-            
+
             # Format datetime to GitHub API format: YYYY-MM-DDTHH:MM:SSZ
             since_str = since.strftime("%Y-%m-%dT%H:%M:%SZ")
-            
+
             # Construct search query for repositories pushed after the since date
             query = f"pushed:>{since_str}"
-            
+
             # Build the request URL with query parameters
             per_page = min(limit, 100)  # GitHub API max is 100 per page
             url = f"{self.base_url}{self.search_endpoint}?q={query}&sort=updated&order=desc&per_page={per_page}"
-            
+
             # Generate cache key for this request
             cache_key = self._get_cache_key(url)
-            
+
             # Try to get cached ETag from Redis
             cached_etag = None
             try:
@@ -143,26 +148,26 @@ class GitHubExtractor(BaseExtractor):
                     logger.debug(f"Found cached ETag for {url}: {cached_etag}")
             except Exception as e:
                 logger.warning(f"Failed to retrieve cached ETag from Redis: {e}")
-            
+
             # Prepare request headers
             headers = {}
             if cached_etag:
                 headers["If-None-Match"] = cached_etag
-            
+
             logger.info(f"Making request to {url} with query: {query}")
-            
+
             # Make the request with conditional headers and get full response
             response = await self.http_client.get_with_response(url, headers=headers)
-            
+
             if response is None:
                 logger.error("Failed to fetch GitHub repositories")
                 return []
-            
+
             # Handle 304 Not Modified response
             if response.status_code == 304:
                 logger.info("Received 304 Not Modified - content unchanged, returning empty list")
                 return []
-            
+
             # Try to cache the new ETag if present in response headers
             try:
                 etag = response.headers.get("ETag")
@@ -173,19 +178,19 @@ class GitHubExtractor(BaseExtractor):
                     logger.debug(f"Cached new ETag for {url}: {etag}")
             except Exception as e:
                 logger.warning(f"Failed to cache ETag in Redis: {e}")
-            
+
             # Parse JSON response
             try:
-                response_data = response.json()
+                response_data = await response.json()
             except Exception as e:
                 logger.error(f"Failed to parse JSON response: {e}")
                 return []
-            
+
             # Handle successful response
             if isinstance(response_data, dict) and "items" in response_data:
                 raw_items = response_data["items"]
                 logger.info(f"Successfully fetched {len(raw_items)} GitHub repositories")
-                
+
                 # Normalize the raw items using the normalizer if available
                 if self.normalizer is not None:
                     normalized_items = []
@@ -194,9 +199,11 @@ class GitHubExtractor(BaseExtractor):
                             normalized_item = self.normalizer.normalize(raw_item)
                             normalized_items.append(normalized_item)
                         except Exception as e:
-                            logger.warning(f"Failed to normalize repository {raw_item.get('full_name', 'unknown')}: {e}")
+                            logger.warning(
+                                f"Failed to normalize repository {raw_item.get('full_name', 'unknown')}: {e}"
+                            )
                             continue
-                    
+
                     logger.info(f"Successfully normalized {len(normalized_items)} repositories")
                     return normalized_items
                 else:
@@ -205,7 +212,7 @@ class GitHubExtractor(BaseExtractor):
             else:
                 logger.error(f"Unexpected response format from GitHub API: {type(response_data)}")
                 return []
-                
+
         except Exception as e:
             logger.error(f"Error fetching GitHub repositories: {e}")
             return []
@@ -218,21 +225,21 @@ class GitHubExtractor(BaseExtractor):
         if not self.repositories:
             logger.error("No repositories configured for releases mode")
             return []
-            
+
         logger.info(f"Fetching releases from {len(self.repositories)} repositories (limit: {limit}, since: {since})")
-        
+
         all_releases = []
-        
+
         for repo_full_name in self.repositories:
             try:
                 logger.info(f"Fetching releases for repository: {repo_full_name}")
-                
+
                 # Construct the API URL for the releases endpoint
                 url = f"{self.base_url}/repos/{repo_full_name}/releases"
-                
+
                 # Generate cache key for this request
                 cache_key = self._get_cache_key(url)
-                
+
                 # Try to get cached ETag from Redis
                 cached_etag = None
                 try:
@@ -242,24 +249,24 @@ class GitHubExtractor(BaseExtractor):
                         logger.debug(f"Found cached ETag for {url}: {cached_etag}")
                 except Exception as e:
                     logger.warning(f"Failed to retrieve cached ETag from Redis: {e}")
-                
+
                 # Prepare request headers
                 headers = {}
                 if cached_etag:
                     headers["If-None-Match"] = cached_etag
-                
+
                 # Make the request with conditional headers and get full response
                 response = await self.http_client.get_with_response(url, headers=headers)
-                
+
                 if response is None:
                     logger.warning(f"Failed to fetch releases for {repo_full_name}")
                     continue
-                
+
                 # Handle 304 Not Modified response
                 if response.status_code == 304:
                     logger.info(f"Received 304 Not Modified for {repo_full_name} - content unchanged, skipping")
                     continue
-                
+
                 # Try to cache the new ETag if present in response headers
                 try:
                     etag = response.headers.get("ETag")
@@ -270,18 +277,18 @@ class GitHubExtractor(BaseExtractor):
                         logger.debug(f"Cached new ETag for {url}: {etag}")
                 except Exception as e:
                     logger.warning(f"Failed to cache ETag in Redis: {e}")
-                
+
                 # Parse JSON response
                 try:
-                    response_data = response.json()
+                    response_data = await response.json()
                 except Exception as e:
                     logger.error(f"Failed to parse JSON response for {repo_full_name}: {e}")
                     continue
-                
+
                 if not isinstance(response_data, list):
                     logger.warning(f"Unexpected response format for {repo_full_name}: {type(response_data)}")
                     continue
-                
+
                 # Filter releases by since date if provided
                 filtered_releases = []
                 for release in response_data:
@@ -290,25 +297,29 @@ class GitHubExtractor(BaseExtractor):
                         published_at_str = release.get("published_at")
                         if published_at_str:
                             try:
-                                from datetime import datetime
-                                published_at = datetime.fromisoformat(published_at_str.replace('Z', '+00:00'))
+                                from datetime import datetime, timezone
+
+                                published_at = datetime.fromisoformat(published_at_str.replace("Z", "+00:00"))
+                                # Ensure both datetimes are timezone-aware for comparison
+                                if since.tzinfo is None:
+                                    since = since.replace(tzinfo=timezone.utc)
                                 if published_at <= since:
                                     continue  # Skip releases older than since date
                             except ValueError:
                                 logger.warning(f"Could not parse published_at date: {published_at_str}")
-                    
+
                     # Add repository full name to the release object
-                    release['repository_full_name'] = repo_full_name
+                    release["repository_full_name"] = repo_full_name
                     filtered_releases.append(release)
-                
+
                 # Extend all_releases with the decorated release items
                 all_releases.extend(filtered_releases)
                 logger.info(f"Successfully fetched {len(filtered_releases)} releases from {repo_full_name}")
-                
+
             except Exception as e:
                 logger.error(f"Error fetching releases for {repo_full_name}: {e}")
                 continue  # Continue with other repositories
-        
+
         # Normalize the raw releases using the normalizer if available
         if self.normalizer is not None:
             normalized_releases = []
@@ -317,11 +328,11 @@ class GitHubExtractor(BaseExtractor):
                     normalized_release = self.normalizer.normalize(raw_release)
                     normalized_releases.append(normalized_release)
                 except Exception as e:
-                    repo_name = raw_release.get('repository_full_name', 'unknown')
-                    release_name = raw_release.get('name') or raw_release.get('tag_name', 'unknown')
+                    repo_name = raw_release.get("repository_full_name", "unknown")
+                    release_name = raw_release.get("name") or raw_release.get("tag_name", "unknown")
                     logger.warning(f"Failed to normalize release {release_name} from {repo_name}: {e}")
                     continue
-            
+
             logger.info(f"Successfully normalized {len(normalized_releases)} releases")
             return normalized_releases[:limit]  # Respect the limit parameter
         else:
@@ -349,12 +360,10 @@ class GitHubExtractor(BaseExtractor):
         """
         try:
             url = f"{self.base_url}/rate_limit"
-            headers = {
-                "Accept": "application/vnd.github.v3+json"
-            }
+            headers = {"Accept": "application/vnd.github.v3+json"}
             if self.token:
                 headers["Authorization"] = f"token {self.token}"
-            
+
             response = await self.http_client.get_json(url)
             return response is not None and isinstance(response, dict)
         except Exception as e:

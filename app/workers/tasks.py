@@ -128,7 +128,7 @@ async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any
                     normalized_item = normalizer.normalize(raw_item)
                     normalized_items.append(normalized_item)
                 except Exception as e:
-                    logger.warning(f"Failed to normalize item {raw_item.external_id}: {e}")
+                    logger.warning(f"Failed to normalize item {raw_item.get('id', 'unknown')}: {e}")
                     normalization_errors += 1
 
             logger.info(f"Normalized {len(normalized_items)} items ({normalization_errors} errors)")
@@ -197,33 +197,33 @@ def ingest_hackernews_task() -> dict[str, Any]:
 def schedule_all_sources_task(self) -> dict[str, Any]:
     """
     Periodic task that queries all active sources and schedules ingestion tasks.
-    
+
     This task runs every 15 minutes and dynamically dispatches ingest_source_task
     for each active source in the database. This provides a flexible scheduling
     mechanism that doesn't require hardcoded source names.
-    
+
     Returns:
         Dict with scheduling statistics: sources_found, tasks_scheduled
     """
     logger.info("Starting scheduled ingestion for all active sources")
-    
+
     try:
         # Check if an event loop is already running in the current thread
         asyncio.get_running_loop()
-        
+
         # If so, run in a separate thread to avoid conflicts
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(lambda: asyncio.run(_schedule_all_sources_async(self)))
             result = future.result()
-            
+
     except RuntimeError:
         # If no event loop is running, we can safely start one
         result = asyncio.run(_schedule_all_sources_async(self))
-        
+
     except Exception as e:
         logger.error(f"Failed to schedule source ingestion tasks: {e}", exc_info=True)
         return {"sources_found": 0, "tasks_scheduled": 0, "error": str(e)}
-    
+
     logger.info(
         f"Scheduled ingestion completed: {result['tasks_scheduled']} tasks for {result['sources_found']} sources"
     )
@@ -233,25 +233,25 @@ def schedule_all_sources_task(self) -> dict[str, Any]:
 async def _schedule_all_sources_async(task_instance) -> dict[str, Any]:
     """
     Async function to query active sources and schedule ingestion tasks.
-    
+
     Args:
         task_instance: The Celery task instance with db_session property
-        
+
     Returns:
         Dict with scheduling statistics
     """
     session = task_instance.db_session
-    
+
     try:
         # Query all active sources
         stmt = select(Source).where(Source.is_active.is_(True))
         result = await session.execute(stmt)
         active_sources = result.scalars().all()
-        
+
         logger.info(f"Found {len(active_sources)} active sources")
-        
+
         tasks_scheduled = 0
-        
+
         # Schedule ingestion task for each active source
         for source in active_sources:
             try:
@@ -259,15 +259,15 @@ async def _schedule_all_sources_async(task_instance) -> dict[str, Any]:
                 ingest_source_task.apply_async(args=[source.name])
                 tasks_scheduled += 1
                 logger.info(f"Scheduled ingestion task for source: {source.name}")
-                
+
             except Exception as e:
                 logger.error(f"Failed to schedule ingestion for source {source.name}: {e}")
-        
+
         return {
             "sources_found": len(active_sources),
             "tasks_scheduled": tasks_scheduled,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to query active sources: {e}", exc_info=True)
         raise

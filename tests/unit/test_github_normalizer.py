@@ -32,7 +32,7 @@ class TestGitHubNormalizer:
             "description": "A test repository for unit testing",
             "stargazers_count": 150,
             "pushed_at": "2023-12-01T10:00:00Z",
-            "updated_at": "2023-12-01T09:30:00Z"
+            "updated_at": "2023-12-01T09:30:00Z",
         }
 
     @pytest.fixture
@@ -46,7 +46,7 @@ class TestGitHubNormalizer:
             "html_url": "https://github.com/facebook/react/releases/tag/v18.2.0",
             "body": "This release includes bug fixes and performance improvements.",
             "published_at": "2023-12-01T12:00:00Z",
-            "stargazers_count": 1000
+            "stargazers_count": 1000,
         }
 
     def test_normalize_repository_success(self, normalizer, sample_repository_data):
@@ -71,7 +71,7 @@ class TestGitHubNormalizer:
             "description": "A test repository",
             "stargazers_count": 150,
             # No pushed_at
-            "updated_at": "2023-12-01T09:30:00Z"
+            "updated_at": "2023-12-01T09:30:00Z",
         }
 
         result = normalizer.normalize(repo_data)
@@ -334,11 +334,7 @@ class TestGitHubNormalizer:
 
     def test_normalize_malformed_repository_data(self, normalizer):
         """Test normalization with completely malformed repository data."""
-        malformed_data = {
-            "not_id": "wrong_field",
-            "wrong_name": "test",
-            "bad_url": "not-a-url"
-        }
+        malformed_data = {"not_id": "wrong_field", "wrong_name": "test", "bad_url": "not-a-url"}
 
         with pytest.raises(NormalizationError):
             normalizer.normalize(malformed_data)
@@ -348,7 +344,7 @@ class TestGitHubNormalizer:
         malformed_data = {
             "repository_full_name": "test/repo",  # This makes it a release
             "not_id": "wrong_field",
-            "wrong_url": "not-a-url"
+            "wrong_url": "not-a-url",
         }
 
         with pytest.raises(NormalizationError):
@@ -391,7 +387,7 @@ class TestGitHubNormalizer:
             "id": None,  # This might cause issues when converting to string
             "full_name": "test/repo",
             "html_url": "https://github.com/test/repo",
-            "pushed_at": "2023-12-01T10:00:00Z"
+            "pushed_at": "2023-12-01T10:00:00Z",
         }
 
         # This should actually succeed because None gets converted to "None" string

@@ -1,7 +1,7 @@
 """
 Integration tests for GitHub ingestion pipeline.
 
-Tests the complete end-to-end flow: ingest_source_task -> IngestionService -> 
+Tests the complete end-to-end flow: ingest_source_task -> IngestionService ->
 GitHubExtractor -> GitHubNormalizer -> Database persistence.
 """
 
@@ -26,6 +26,19 @@ pytestmark = pytest.mark.asyncio
 
 
 class TestGitHubIngestionIntegration:
+    @pytest.fixture
+    def mock_github_http_client(self, sample_github_search_response):
+        """Create a properly mocked HTTP client for GitHub."""
+        mock_client = AsyncMock()
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = sample_github_search_response
+        mock_response.headers = {"ETag": "test-etag"}
+        mock_client.get_with_response.return_value = mock_response
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
+        return mock_client
+
     """Integration tests for GitHub ingestion pipeline."""
 
     @pytest_asyncio.fixture
@@ -36,11 +49,7 @@ class TestGitHubIngestionIntegration:
             type="api",
             base_url="https://api.github.com",
             rate_limit=5000,
-            config={
-                "token": "test_github_token",
-                "search_endpoint": "/search/repositories",
-                "mode": "search"
-            },
+            config={"token": "test_github_token", "search_endpoint": "/search/repositories", "mode": "search"},
             is_active=True,
         )
         db_session.add(source)
@@ -59,7 +68,7 @@ class TestGitHubIngestionIntegration:
             config={
                 "token": "test_github_token",
                 "mode": "releases",
-                "repositories": ["facebook/react", "microsoft/vscode"]
+                "repositories": ["facebook/react", "microsoft/vscode"],
             },
             is_active=True,
         )
@@ -84,7 +93,7 @@ class TestGitHubIngestionIntegration:
                     "pushed_at": "2023-12-01T10:00:00Z",
                     "updated_at": "2023-12-01T10:00:00Z",
                     "language": "Python",
-                    "topics": ["testing", "integration", "python"]
+                    "topics": ["testing", "integration", "python"],
                 },
                 {
                     "id": 789012,
@@ -95,14 +104,20 @@ class TestGitHubIngestionIntegration:
                     "pushed_at": "2023-12-01T11:30:00Z",
                     "updated_at": "2023-12-01T11:30:00Z",
                     "language": "JavaScript",
-                    "topics": ["library", "javascript", "npm"]
-                }
-            ]
+                    "topics": ["library", "javascript", "npm"],
+                },
+            ],
         }
 
     @pytest.fixture
     def sample_github_releases_response(self):
         """Sample GitHub releases API response."""
+        # Use recent dates so they won't be filtered out by the "since" parameter
+        from datetime import datetime, timedelta
+
+        recent_date1 = (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        recent_date2 = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
         return [
             {
                 "id": 111111,
@@ -110,9 +125,9 @@ class TestGitHubIngestionIntegration:
                 "tag_name": "v18.2.0",
                 "html_url": "https://github.com/facebook/react/releases/tag/v18.2.0",
                 "body": "This release includes important bug fixes and performance improvements.",
-                "published_at": "2023-12-01T12:00:00Z",
+                "published_at": recent_date1,
                 "prerelease": False,
-                "draft": False
+                "draft": False,
             },
             {
                 "id": 222222,
@@ -120,10 +135,10 @@ class TestGitHubIngestionIntegration:
                 "tag_name": "v18.2.1",
                 "html_url": "https://github.com/facebook/react/releases/tag/v18.2.1",
                 "body": "Patch release with critical bug fixes.",
-                "published_at": "2023-12-01T14:00:00Z",
+                "published_at": recent_date2,
                 "prerelease": False,
-                "draft": False
-            }
+                "draft": False,
+            },
         ]
 
     @pytest.fixture
@@ -139,14 +154,9 @@ class TestGitHubIngestionIntegration:
         github_search_source: Source,
         sample_github_search_response: dict,
         mock_task_instance,
+        mock_github_http_client,
     ):
-        """Test complete GitHub search mode ingestion pipeline."""
-        # Mock HTTP client responses
-        mock_response = MagicMock(spec=Response)
-        mock_response.status_code = 200
-        mock_response.json.return_value = sample_github_search_response
-        mock_response.headers = {"ETag": "test-etag-123"}
-
+        """Test complete GitHub search mode ingestion pipeline (mocking HTTP client)."""
         # Mock Redis client
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None  # No cached ETag
@@ -164,14 +174,11 @@ class TestGitHubIngestionIntegration:
         initial_runs = result.scalar()
         assert initial_runs == 0
 
-        # Mock the HTTP client and Redis in the extractor
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = mock_response
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        # Patch the HTTP client in the extractor
+        from app.core.extractors.github import GitHubExtractor
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_github_http_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 # Run the ingestion task
                 result = await _ingest_source_async(mock_task_instance, github_search_source.name)
 
@@ -237,9 +244,9 @@ class TestGitHubIngestionIntegration:
     ):
         """Test complete GitHub releases mode ingestion pipeline."""
         # Mock HTTP client responses for both repositories
-        mock_response = MagicMock(spec=Response)
+        mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json.return_value = sample_github_releases_response
+        mock_response.json = AsyncMock(return_value=sample_github_releases_response)
         mock_response.headers = {"ETag": "test-etag-releases"}
 
         # Mock Redis client
@@ -254,13 +261,15 @@ class TestGitHubIngestionIntegration:
         assert initial_count == 0
 
         # Mock the HTTP client and Redis in the extractor
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = mock_response
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.return_value = mock_response
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 # Run the ingestion task
                 result = await _ingest_source_async(mock_task_instance, github_releases_source.name)
 
@@ -319,9 +328,9 @@ class TestGitHubIngestionIntegration:
         await db_session.commit()
 
         # Mock HTTP response
-        mock_response = MagicMock(spec=Response)
+        mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json.return_value = sample_github_search_response
+        mock_response.json = AsyncMock(return_value=sample_github_search_response)
         mock_response.headers = {"ETag": "test-etag-update"}
 
         mock_redis = AsyncMock()
@@ -329,13 +338,15 @@ class TestGitHubIngestionIntegration:
         mock_redis.setex.return_value = True
 
         # Run ingestion
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = mock_response
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.return_value = mock_response
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 result = await _ingest_source_async(mock_task_instance, github_search_source.name)
 
         # Verify result shows 1 update and 1 new item
@@ -360,20 +371,22 @@ class TestGitHubIngestionIntegration:
     ):
         """Test GitHub ingestion when API returns 304 Not Modified."""
         # Mock HTTP response with 304 status
-        mock_response = MagicMock(spec=Response)
+        mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 304
 
         mock_redis = AsyncMock()
         mock_redis.get.return_value = b"cached-etag"
 
         # Run ingestion
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = mock_response
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.return_value = mock_response
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 result = await _ingest_source_async(mock_task_instance, github_search_source.name)
 
         # Should complete successfully with no items processed
@@ -403,13 +416,15 @@ class TestGitHubIngestionIntegration:
         mock_redis.get.return_value = None
 
         # Mock HTTP client to return None (error case)
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = None  # Simulate HTTP error
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.return_value = None  # Simulate HTTP error
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 result = await _ingest_source_async(mock_task_instance, github_search_source.name)
 
         # Should complete with no items processed
@@ -449,13 +464,13 @@ class TestGitHubIngestionIntegration:
                     # Missing required fields - will cause normalization error
                     "id": 789012,
                     # Missing full_name, html_url, etc.
-                }
+                },
             ]
         }
 
-        mock_response = MagicMock(spec=Response)
+        mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json.return_value = response_data
+        mock_response.json = AsyncMock(return_value=response_data)
         mock_response.headers = {"ETag": "test-etag-errors"}
 
         mock_redis = AsyncMock()
@@ -463,13 +478,15 @@ class TestGitHubIngestionIntegration:
         mock_redis.setex.return_value = True
 
         # Run ingestion
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = mock_response
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.return_value = mock_response
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 result = await _ingest_source_async(mock_task_instance, github_search_source.name)
 
         # Should process only the valid item
@@ -506,17 +523,13 @@ class TestGitHubIngestionIntegration:
         # Create a completed ingestion run to establish a "since" timestamp
         ingestion_service = IngestionService(db_session)
         completed_time = datetime.now(UTC) - timedelta(hours=1)
-        
-        run = await ingestion_service.create_ingestion_run(github_search_source.id)
-        await ingestion_service.update_ingestion_run(
-            run.id,
-            status="completed",
-            completed_at=completed_time
-        )
 
-        mock_response = MagicMock(spec=Response)
+        run = await ingestion_service.create_ingestion_run(github_search_source.id)
+        await ingestion_service.update_ingestion_run(run.id, status="completed", completed_at=completed_time)
+
+        mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json.return_value = sample_github_search_response
+        mock_response.json = AsyncMock(return_value=sample_github_search_response)
         mock_response.headers = {"ETag": "test-etag-since"}
 
         mock_redis = AsyncMock()
@@ -524,19 +537,21 @@ class TestGitHubIngestionIntegration:
         mock_redis.setex.return_value = True
 
         # Run ingestion
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.return_value = mock_response
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.return_value = mock_response
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 result = await _ingest_source_async(mock_task_instance, github_search_source.name)
 
         # Verify the HTTP request included a since parameter based on last ingestion
         mock_client.get_with_response.assert_called_once()
         call_args = mock_client.get_with_response.call_args[0][0]
-        
+
         # The URL should contain a pushed:> query with a timestamp
         assert "pushed:>" in call_args
         assert "search/repositories" in call_args
@@ -595,10 +610,10 @@ class TestGitHubIngestionIntegration:
                 "tag_name": "v1.0.0",
                 "html_url": "https://github.com/facebook/react/releases/tag/v1.0.0",
                 "body": "Old release",
-                "published_at": "2023-11-01T12:00:00Z"  # Old date
+                "published_at": "2023-11-01T12:00:00Z",  # Old date
             }
         ]
-        
+
         new_releases = [
             {
                 "id": 222222,
@@ -606,17 +621,17 @@ class TestGitHubIngestionIntegration:
                 "tag_name": "v2.0.0",
                 "html_url": "https://github.com/facebook/react/releases/tag/v2.0.0",
                 "body": "New release",
-                "published_at": "2023-12-01T12:00:00Z"  # Recent date
+                "published_at": "2023-12-01T12:00:00Z",  # Recent date
             }
         ]
 
         # Mock responses to return different data for different calls
         mock_responses = [
-            MagicMock(spec=Response, status_code=200, headers={"ETag": "etag1"}),
-            MagicMock(spec=Response, status_code=200, headers={"ETag": "etag2"})
+            AsyncMock(spec=Response, status_code=200, headers={"ETag": "etag1"}),
+            AsyncMock(spec=Response, status_code=200, headers={"ETag": "etag2"}),
         ]
-        mock_responses[0].json.return_value = old_releases + new_releases
-        mock_responses[1].json.return_value = old_releases + new_releases
+        mock_responses[0].json = AsyncMock(return_value=old_releases + new_releases)
+        mock_responses[1].json = AsyncMock(return_value=old_releases + new_releases)
 
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
@@ -625,22 +640,20 @@ class TestGitHubIngestionIntegration:
         # Create a previous ingestion run to establish a "since" date
         ingestion_service = IngestionService(db_session)
         since_time = datetime(2023, 11, 15)  # Between old and new releases
-        
+
         run = await ingestion_service.create_ingestion_run(github_releases_source.id)
-        await ingestion_service.update_ingestion_run(
-            run.id,
-            status="completed",
-            completed_at=since_time
-        )
+        await ingestion_service.update_ingestion_run(run.id, status="completed", completed_at=since_time)
 
         # Run ingestion
-        with patch('app.core.extractors.github.RateLimitedClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get_with_response.side_effect = mock_responses
-            mock_client.default_headers = {}
-            mock_client_class.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.get_with_response.side_effect = mock_responses
+        mock_client.default_headers = {}
+        mock_client.close = AsyncMock()
 
-            with patch('app.core.extractors.github.RedisClient.get_redis', return_value=mock_redis):
+        from app.core.extractors.github import GitHubExtractor
+
+        with patch.object(GitHubExtractor, "get_http_client", return_value=mock_client):
+            with patch("app.core.extractors.github.RedisClient.get_redis", return_value=mock_redis):
                 result = await _ingest_source_async(mock_task_instance, github_releases_source.name)
 
         # Should only process new releases (after since date) from both repositories
