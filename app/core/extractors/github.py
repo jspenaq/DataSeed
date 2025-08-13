@@ -181,7 +181,7 @@ class GitHubExtractor(BaseExtractor):
 
             # Parse JSON response
             try:
-                response_data = await response.json()
+                response_data = response.json()
             except Exception as e:
                 logger.error(f"Failed to parse JSON response: {e}")
                 return []
@@ -280,7 +280,7 @@ class GitHubExtractor(BaseExtractor):
 
                 # Parse JSON response
                 try:
-                    response_data = await response.json()
+                    response_data = response.json()
                 except Exception as e:
                     logger.error(f"Failed to parse JSON response for {repo_full_name}: {e}")
                     continue
@@ -362,9 +362,9 @@ class GitHubExtractor(BaseExtractor):
             url = f"{self.base_url}/rate_limit"
             headers = {"Accept": "application/vnd.github.v3+json"}
             if self.token:
-                headers["Authorization"] = f"token {self.token}"
+                headers["Authorization"] = f"Bearer {self.token}"
 
-            response = await self.http_client.get_json(url)
+            response = await self.http_client.get_json(url, headers=headers)
             return response is not None and isinstance(response, dict)
         except Exception as e:
             logger.error(f"GitHub health check failed: {e}")

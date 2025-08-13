@@ -17,7 +17,6 @@ from app.core.extractors.github import GitHubExtractor
 from app.core.http_client import RateLimitedClient
 from app.schemas.items import ContentItemCreate
 
-# Configure pytest-asyncio
 pytestmark = pytest.mark.asyncio
 
 
@@ -178,7 +177,7 @@ class TestGitHubExtractor:
         # Mock HTTP response
         mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json = AsyncMock(return_value=sample_repository_data)
+        mock_response.json = MagicMock(return_value=sample_repository_data)
         mock_response.headers = {"ETag": "test-etag"}
         mock_http_client.get_with_response.return_value = mock_response
 
@@ -238,7 +237,7 @@ class TestGitHubExtractor:
         # Mock HTTP responses for each repository
         mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json = AsyncMock(return_value=sample_release_data)
+        mock_response.json = MagicMock(return_value=sample_release_data)
         mock_response.headers = {"ETag": "test-etag"}
         mock_http_client.get_with_response.return_value = mock_response
 
@@ -309,7 +308,7 @@ class TestGitHubExtractor:
 
         mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json = AsyncMock(return_value=[old_release, new_release])
+        mock_response.json = MagicMock(return_value=[old_release, new_release])
         mock_response.headers = {"ETag": "test-etag"}
         mock_http_client.get_with_response.return_value = mock_response
 
@@ -399,7 +398,7 @@ class TestGitHubExtractor:
         # Mock HTTP response
         mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json = AsyncMock(return_value=sample_repository_data)
+        mock_response.json = MagicMock(return_value=sample_repository_data)
         mock_response.headers = {"ETag": "test-etag"}
         mock_http_client.get_with_response.return_value = mock_response
 
@@ -422,7 +421,7 @@ class TestGitHubExtractor:
         # Mock HTTP response
         mock_response = AsyncMock(spec=Response)
         mock_response.status_code = 200
-        mock_response.json = AsyncMock(return_value=sample_repository_data)
+        mock_response.json = MagicMock(return_value=sample_repository_data)
         mock_response.headers = {}
         mock_http_client.get_with_response.return_value = mock_response
 
@@ -451,7 +450,10 @@ class TestGitHubExtractor:
         result = await extractor.health_check()
 
         assert result is True
-        mock_http_client.get_json.assert_called_once_with("https://api.github.com/rate_limit")
+        mock_http_client.get_json.assert_called_once_with(
+            "https://api.github.com/rate_limit",
+            headers={"Accept": "application/vnd.github.v3+json", "Authorization": "Bearer test_token"},
+        )
 
     async def test_health_check_failure(self, search_config, mock_http_client):
         """Test health check failure."""

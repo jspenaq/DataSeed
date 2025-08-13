@@ -25,7 +25,7 @@ from app.workers.celery_app import celery_app
 
 
 @celery_app.task(bind=True, name="ingest.source")
-def ingest_source_task(self, source_name: str) -> dict[str, Any]:
+def ingest_source_task(self, source_identifier: str | int) -> dict[str, Any]:
     """
     Generic Celery task to ingest data from any registered source.
 
@@ -36,12 +36,12 @@ def ingest_source_task(self, source_name: str) -> dict[str, Any]:
     4. Tracks ingestion run statistics
 
     Args:
-        source_name: Name of the source to ingest (e.g., "hackernews", "reddit")
+        source_identifier: Name or ID of the source to ingest (e.g., "hackernews", 1)
 
     Returns:
         Dict with ingestion statistics: processed, new, updated counts
     """
-    logger.info(f"Starting {source_name} ingestion task")
+    logger.info(f"Starting {source_identifier} ingestion task")
 
     try:
         # Check if an event loop is already running in the current thread
@@ -51,35 +51,35 @@ def ingest_source_task(self, source_name: str) -> dict[str, Any]:
         # to avoid conflicts.
         with concurrent.futures.ThreadPoolExecutor() as executor:
             # We submit a lambda that calls asyncio.run(), ensuring a clean event loop.
-            future = executor.submit(lambda: asyncio.run(_ingest_source_async(self, source_name)))
+            future = executor.submit(lambda: asyncio.run(_ingest_source_async(self, source_identifier)))
             result = future.result()
 
     except RuntimeError:
         # If no event loop is running, we can safely start one.
-        result = asyncio.run(_ingest_source_async(self, source_name))
+        result = asyncio.run(_ingest_source_async(self, source_identifier))
 
     except Exception as e:
-        logger.error(f"{source_name} ingestion task failed: {e}", exc_info=True)
+        logger.error(f"{source_identifier} ingestion task failed: {e}", exc_info=True)
         return {"processed": 0, "new": 0, "updated": 0, "error": str(e)}
 
     log_extra = {
-        "source_name": source_name,
+        "source_identifier": source_identifier,
         "processed": result["processed"],
         "new": result["new"],
         "updated": result["updated"],
         "errors": result["errors"],
     }
-    logger.info(f"{source_name} ingestion task completed successfully", extra=log_extra)
+    logger.info(f"{source_identifier} ingestion task completed successfully", extra=log_extra)
     return result
 
 
-async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any]:
+async def _ingest_source_async(task_instance, source_identifier: str | int) -> dict[str, Any]:
     """
     Generic async orchestration function for source ingestion.
 
     Args:
         task_instance: The Celery task instance with db_session property
-        source_name: Name of the source to ingest
+        source_identifier: Name or ID of the source to ingest
 
     Returns:
         Dict with ingestion statistics
@@ -87,16 +87,16 @@ async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any
     session = task_instance.db_session
     try:
         # 1) Locate source
-        source = await get_source_by_name(session, source_name)
+        source = await get_source_by_identifier(session, source_identifier)
         if not source:
-            raise ValueError(f"{source_name} source not found in database")
+            raise ValueError(f"{source_identifier} source not found in database")
 
         # 2) Determine since timestamp
         since = await get_last_since(session, source.id)
         if not since:
             since = datetime.now(UTC) - timedelta(hours=24)
 
-        logger.info(f"Fetching {source_name} items since {since}")
+        logger.info(f"Fetching {source.name} items since {since}")
 
         # 3) Start ingestion run
         run_id = await _start_run(session, source.id)
@@ -113,25 +113,30 @@ async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any
             )
 
             # Use factory function to get the appropriate extractor
-            async with get_extractor(source_name, extractor_config) as extractor:
+            async with get_extractor(source.name, extractor_config, source_id=source.id) as extractor:
                 raw_items = await extractor.fetch_recent(since=since, limit=100)
 
-            logger.info(f"Extracted {len(raw_items)} raw items from {source_name}")
+            logger.info(f"Extracted {len(raw_items)} raw items from {source.name}")
 
             # 5) Normalize data using factory-created normalizer
-            normalizer = get_normalizer(source_name, source.id)
-            normalized_items = []
-            normalization_errors = 0
+            from app.schemas.items import ContentItemCreate
+            if raw_items and isinstance(raw_items[0], ContentItemCreate):
+                normalized_items = raw_items
+                normalization_errors = 0
+                logger.info("Items are already normalized, skipping normalization step")
+            else:
+                normalizer = get_normalizer(source.name, source.id)
+                normalized_items = []
+                normalization_errors = 0
 
-            for raw_item in raw_items:
-                try:
-                    normalized_item = normalizer.normalize(raw_item)
-                    normalized_items.append(normalized_item)
-                except Exception as e:
-                    logger.warning(f"Failed to normalize item {raw_item.get('id', 'unknown')}: {e}")
-                    normalization_errors += 1
-
-            logger.info(f"Normalized {len(normalized_items)} items ({normalization_errors} errors)")
+                for raw_item in raw_items:
+                    try:
+                        normalized_item = normalizer.normalize(raw_item)
+                        normalized_items.append(normalized_item)
+                    except Exception as e:
+                        logger.warning(f"Failed to normalize item {raw_item.get('id', 'unknown')}: {e}")
+                        normalization_errors += 1
+                logger.info(f"Normalized {len(normalized_items)} items ({normalization_errors} errors)")
 
             # 6) Upsert to database using service instantiated within task
             ingestion_service = IngestionService(session)
@@ -155,9 +160,9 @@ async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any
             }
 
             logger.info(
-                f"{source_name} ingestion completed successfully",
+                f"{source.name} ingestion completed successfully",
                 extra={
-                    "source": source_name,
+                    "source": source.name,
                     "processed": result["processed"],
                     "new": result["new"],
                     "updated": result["updated"],
@@ -173,7 +178,7 @@ async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any
             raise
 
     except Exception as e:
-        logger.error(f"{source_name} ingestion failed: {e}", exc_info=True)
+        logger.error(f"{(source.name if source else source_identifier)} ingestion failed: {e}", exc_info=True)
         raise
 
 
@@ -273,23 +278,27 @@ async def _schedule_all_sources_async(task_instance) -> dict[str, Any]:
         raise
 
 
-async def get_source_by_name(session: AsyncSession, name: str) -> Source | None:
+async def get_source_by_identifier(session: AsyncSession, identifier: str | int) -> Source | None:
     """
-    Get a source by name from the database.
+    Get a source by name or ID from the database.
 
     Args:
         session: Database session
-        name: Source name to look up
+        identifier: Source name or ID to look up
 
     Returns:
         Source instance or None if not found
     """
     try:
-        stmt = select(Source).where(Source.name == name, Source.is_active.is_(True))
+        if isinstance(identifier, int):
+            stmt = select(Source).where(Source.id == identifier, Source.is_active.is_(True))
+        else:
+            stmt = select(Source).where(Source.name == identifier, Source.is_active.is_(True))
+
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
     except Exception as e:
-        logger.error(f"Failed to get source by name '{name}': {e}")
+        logger.error(f"Failed to get source by identifier '{identifier}': {e}")
         return None
 
 

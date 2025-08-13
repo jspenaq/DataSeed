@@ -66,7 +66,7 @@ async def run_hackernews_pipeline(db: AsyncSession):
             raise Exception("HackerNews API health check failed")
         logger.info("✓ HackerNews API is accessible")
 
-        raw_items = await extractor.fetch_recent(limit=10)
+        raw_items = await extractor.fetch_recent(limit=20)
         logger.info(f"✓ Extracted {len(raw_items)} raw items")
 
         # Step 5: Normalization
