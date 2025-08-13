@@ -50,7 +50,7 @@ async def run_hackernews_pipeline(db: AsyncSession):
     source = await get_hackernews_source(db)
     if not source:
         raise Exception("HackerNews source not found")
-    
+
     # Step 2: Initialize components
     extractor_config = ExtractorConfig(base_url=source.base_url, rate_limit=source.rate_limit, config=source.config)
     extractor = HackerNewsExtractor(extractor_config)
@@ -92,7 +92,11 @@ async def run_hackernews_pipeline(db: AsyncSession):
 async def main():
     """Main entry point for the script."""
     logger.remove()
-    logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>", level="INFO")
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level="INFO",
+    )
     logger.info("HackerNews Pipeline Verification Script")
     logger.info(f"Database URL: {settings.DATABASE_URL}")
 

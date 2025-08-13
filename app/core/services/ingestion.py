@@ -6,8 +6,7 @@ including idempotent batch operations and comprehensive run tracking.
 """
 
 import logging
-from datetime import timezone
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, case, func, or_, select
@@ -60,8 +59,8 @@ class IngestionService:
             items_data = []
             for item in items:
                 item_dict = item.model_dump()
-                item_dict["created_at"] = datetime.now(timezone.utc)
-                item_dict["updated_at"] = datetime.now(timezone.utc)
+                item_dict["created_at"] = datetime.now(UTC)
+                item_dict["updated_at"] = datetime.now(UTC)
                 items_data.append(item_dict)
 
             # Build the upsert statement
@@ -158,7 +157,7 @@ class IngestionService:
             SQLAlchemyError: If database operation fails
         """
         if started_at is None:
-            started_at = datetime.now(timezone.utc)
+            started_at = datetime.now(UTC)
 
         logger.info(f"Creating ingestion run for source_id={source_id}")
 
@@ -253,7 +252,7 @@ class IngestionService:
 
             # Auto-set completed_at if status indicates completion
             if status in ("completed", "failed") and completed_at is None:
-                completed_at = datetime.now(timezone.utc)
+                completed_at = datetime.now(UTC)
 
             if completed_at is not None:
                 ingestion_run.completed_at = completed_at
@@ -307,7 +306,7 @@ class IngestionService:
             errors_count=errors_count,
             error_notes=error_notes,
             notes=notes,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(UTC),
         )
 
     async def get_ingestion_runs(
@@ -394,7 +393,7 @@ class IngestionService:
         """
         try:
             # Base query for recent runs
-            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+            cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
             stmt = select(
                 func.count(IngestionRun.id).label("total_runs"),
