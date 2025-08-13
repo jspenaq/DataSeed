@@ -7,7 +7,6 @@ This script demonstrates and verifies the complete ETL pipeline for HackerNews d
 
 import asyncio
 import sys
-from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 # Add the project root to Python path
@@ -21,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.config import settings
 from app.core.extractors.base import ExtractorConfig
 from app.core.extractors.hackernews import HackerNewsExtractor
-from app.core.normalizers.content import get_normalizer
+from app.core.registry import get_normalizer
 from app.core.services.ingestion import IngestionService
 from app.models.source import Source
 

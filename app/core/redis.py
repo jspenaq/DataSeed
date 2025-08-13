@@ -45,16 +45,3 @@ async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
         # We don't close the connection here to reuse it
         # Connection will be closed when the application shuts down
         pass
-
-
-async def check_redis_connection() -> bool:
-    """
-    Check if Redis connection is healthy.
-    Returns True if connection is successful, False otherwise.
-    """
-    try:
-        client = await RedisClient.get_redis()
-        await client.ping()
-        return True
-    except Exception:
-        return False

@@ -1,6 +1,59 @@
-from celery import Celery
+from celery import Celery, Task
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database import engine
+
+
+class DBSessionTask(Task):
+    """
+    Custom Celery Task base class that manages database session lifecycle.
+
+    This class implements the Dependency Inversion Principle by providing
+    a managed database session that is automatically created and cleaned up
+    for each task execution.
+    """
+
+    _db_session = None
+
+    def after_return(self, status, retval, task_id, args, kwargs, einfo):
+        """
+        Clean up database session after task completion.
+
+        This method is called after the task returns, regardless of success or failure.
+        It ensures that the database session is properly closed to prevent connection leaks.
+        """
+        if self._db_session:
+            # For async sessions, we need to run the close in an event loop
+            import asyncio
+
+            try:
+                # Try to get the current event loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is running, schedule the close as a task
+                    loop.create_task(self._db_session.close())
+                else:
+                    # If no loop is running, run it directly
+                    loop.run_until_complete(self._db_session.close())
+            except RuntimeError:
+                # No event loop available, create a new one
+                asyncio.run(self._db_session.close())
+            finally:
+                self._db_session = None
+
+    @property
+    def db_session(self):
+        """
+        Get or create a database session for this task.
+
+        Returns:
+            AsyncSession: Database session instance
+        """
+        if self._db_session is None:
+            self._db_session = AsyncSession(engine)
+        return self._db_session
+
 
 # Create Celery app
 celery_app = Celery(
@@ -8,6 +61,9 @@ celery_app = Celery(
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
 )
+
+# Set the custom task class as the default
+celery_app.Task = DBSessionTask
 
 # Configure Celery
 celery_app.conf.update(
@@ -40,7 +96,7 @@ async def check_celery_connection() -> bool:
 
         # We use the Redis client directly to check connection
         # since Celery doesn't provide a simple way to check connection health
-        from app.core.redis import check_redis_connection
+        from app.core.health_checks import check_redis_connection
 
         return await check_redis_connection()
     except Exception:

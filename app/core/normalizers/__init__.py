@@ -7,8 +7,10 @@ from app.core.normalizers.base import (
 )
 from app.core.normalizers.content import (
     GenericContentNormalizer,
+    GitHubNormalizer,
     HackerNewsNormalizer,
-    get_normalizer,
+    ProductHuntNormalizer,
+    RedditNormalizer,
 )
 
 __all__ = [
@@ -16,6 +18,8 @@ __all__ = [
     "ContentNormalizer",
     "NormalizationError",
     "GenericContentNormalizer",
+    "GitHubNormalizer",
     "HackerNewsNormalizer",
-    "get_normalizer",
+    "ProductHuntNormalizer",
+    "RedditNormalizer",
 ]

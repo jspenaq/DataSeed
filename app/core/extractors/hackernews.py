@@ -2,38 +2,27 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any, cast
 
-import httpx
 from loguru import logger
 
 from app.core.extractors.base import BaseExtractor, ExtractorConfig, RawItem
+from app.core.http_client import RateLimitedClient
+from app.core.registry import register_extractor
 
 
+@register_extractor("hackernews")
 class HackerNewsExtractor(BaseExtractor):
     """HackerNews API extractor using httpx for async operations."""
 
-    def __init__(self, config: ExtractorConfig):
+    def __init__(self, config: ExtractorConfig, http_client: RateLimitedClient | None = None):
         super().__init__(config)
-        self.client: httpx.AsyncClient | None = None
+        self.http_client = http_client or self.get_http_client()
+        # Add user agent to the client if not provided
+        if http_client is None:
+            self.http_client.default_headers["User-Agent"] = "DataSeed/1.0 (https://github.com/jspenaq/dataseed)"
         self.items_endpoint = self.extractor_config.get("items_endpoint", "/topstories.json")
         self.detail_endpoint = self.extractor_config.get("detail_endpoint", "/item/{id}.json")
 
-        # Rate limiting: HN doesn't have strict limits but be respectful
-        self.request_delay = 60 / self.rate_limit if self.rate_limit > 0 else 0.1
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client with proper configuration."""
-        if self.client is None:
-            self.client = httpx.AsyncClient(
-                timeout=httpx.Timeout(30.0),
-                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-                headers={
-                    "User-Agent": "DataSeed/1.0 (https://github.com/jspenaq/dataseed)",
-                    "Accept": "application/json",
-                },
-            )
-        return self.client
-
-    async def _make_request(self, url: str, retries: int = 3) -> dict[str, Any] | None:
+    async def _make_request(self, url: str, retries: int = 3) -> dict[str, Any] | list[Any] | None:
         """
         Make HTTP request with retry logic and rate limiting.
 
@@ -44,38 +33,7 @@ class HackerNewsExtractor(BaseExtractor):
         Returns:
             JSON response data or None if failed
         """
-        client = await self._get_client()
-
-        for attempt in range(retries):
-            try:
-                # Rate limiting
-                if self.request_delay > 0:
-                    await asyncio.sleep(self.request_delay)
-
-                response = await client.get(url)
-                response.raise_for_status()
-
-                return response.json()
-
-            except httpx.HTTPStatusError as e:
-                logger.warning(f"HTTP error {e.response.status_code} for {url}, attempt {attempt + 1}/{retries}")
-                if e.response.status_code == 429:  # Rate limited
-                    await asyncio.sleep(2**attempt)  # Exponential backoff
-                elif e.response.status_code >= 500:  # Server error
-                    await asyncio.sleep(1)
-                else:
-                    break  # Don't retry client errors
-
-            except (httpx.RequestError, httpx.TimeoutException) as e:
-                logger.warning(f"Request error for {url}: {e}, attempt {attempt + 1}/{retries}")
-                await asyncio.sleep(2**attempt)
-
-            except Exception as e:
-                logger.error(f"Unexpected error for {url}: {e}")
-                break
-
-        logger.error(f"Failed to fetch {url} after {retries} attempts")
-        return None
+        return await self.http_client.get_json(url, retries=retries)
 
     async def _fetch_story_ids(self, limit: int = 100) -> list[int]:
         """
@@ -117,7 +75,9 @@ class HackerNewsExtractor(BaseExtractor):
             Item details or None if failed
         """
         url = self.base_url + self.detail_endpoint.format(id=item_id)
-        return await self._make_request(url)
+        result = await self._make_request(url)
+        # Ensure we return a dict for item details
+        return result if isinstance(result, dict) else None
 
     def _parse_item(self, item_data: dict[str, Any]) -> RawItem | None:
         """
@@ -256,9 +216,7 @@ class HackerNewsExtractor(BaseExtractor):
 
     async def close(self):
         """Close the HTTP client."""
-        if self.client:
-            await self.client.aclose()
-            self.client = None
+        await self.http_client.close()
 
     async def __aenter__(self):
         """Async context manager entry."""

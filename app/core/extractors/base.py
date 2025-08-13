@@ -4,6 +4,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
+from app.core.http_client import RateLimitedClient
+
 
 class RawItem(BaseModel):
     """Raw item data from external sources before normalization."""
@@ -33,6 +35,33 @@ class BaseExtractor(ABC):
         self.base_url = config.base_url
         self.rate_limit = config.rate_limit
         self.extractor_config = config.config
+
+    def get_http_client(self) -> RateLimitedClient:
+        """
+        Create HTTP client with configuration from source config.
+
+        Returns:
+            Configured RateLimitedClient instance
+        """
+        client_config = self.extractor_config.get("client", {})
+        return RateLimitedClient(
+            rate_limit=self.rate_limit,
+            retries=client_config.get("retries", 3),
+            semaphore_size=client_config.get("semaphore_size", 10),
+            timeout=client_config.get("timeout", 10.0),
+        )
+
+    async def close(self):
+        """Close any resources used by the extractor."""
+        pass
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
 
     @abstractmethod
     async def fetch_recent(self, since: datetime | None = None, limit: int = 100) -> list[RawItem]:

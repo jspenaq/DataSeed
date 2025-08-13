@@ -20,6 +20,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
+    "pyyaml>=6.0.0",
     "redis>=6.4.0",
     "sqlalchemy>=2.0.43",
     "streamlit>=1.48.0",
@@ -71,7 +72,7 @@ select = [
 [tool.coverage.run]
 branch = true
 source = [
-    "dataseed",  # Include the dataseed package
+    "app",  # Include the app package
 ]
 
 [tool.coverage.report]

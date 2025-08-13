@@ -5,20 +5,19 @@ This module provides the core persistence layer for DataSeed's ETL pipeline,
 including idempotent batch operations and comprehensive run tracking.
 """
 
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ingestion import IngestionRun
 from app.models.items import ContentItem
 from app.schemas.items import ContentItemCreate
-
-logger = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -30,23 +29,22 @@ class IngestionService:
     async def batch_upsert_items(
         self,
         items: list[ContentItemCreate],
-        ingestion_run_id: int | None = None,
     ) -> dict[str, int]:
         """
         Perform batch upsert of content items with conflict resolution.
 
-        Uses PostgreSQL's ON CONFLICT DO UPDATE to handle duplicates based on
-        the unique constraint (source_id, external_id).
+        Uses database-specific ON CONFLICT DO UPDATE to handle duplicates based on
+        the unique constraint (source_id, external_id). Supports PostgreSQL and SQLite.
 
         Args:
             items: List of ContentItemCreate objects to upsert
-            ingestion_run_id: Optional ID of the ingestion run for tracking
 
         Returns:
             Dict with counts: {'new': int, 'updated': int, 'failed': int}
 
         Raises:
             SQLAlchemyError: If database operation fails
+            NotImplementedError: If database dialect is not supported
         """
         if not items:
             logger.info("No items to upsert")
@@ -63,34 +61,71 @@ class IngestionService:
                 item_dict["updated_at"] = datetime.now(UTC)
                 items_data.append(item_dict)
 
-            # Build the upsert statement
-            stmt = insert(ContentItem).values(items_data)
+            # Detect database dialect
+            dialect = self.db.bind.dialect.name
 
-            # Define what to update on conflict
-            update_dict = {
-                "title": stmt.excluded.title,
-                "content": stmt.excluded.content,
-                "url": stmt.excluded.url,
-                "score": stmt.excluded.score,
-                "published_at": stmt.excluded.published_at,
-                "updated_at": stmt.excluded.updated_at,
-            }
+            # Build the upsert statement based on dialect
+            if dialect == "postgresql":
+                stmt = pg_insert(ContentItem).values(items_data)
 
-            # Create the ON CONFLICT DO UPDATE statement
-            upsert_stmt = stmt.on_conflict_do_update(constraint="uq_source_external", set_=update_dict)
+                # Define what to update on conflict
+                update_dict = {
+                    "title": stmt.excluded.title,
+                    "content": stmt.excluded.content,
+                    "url": stmt.excluded.url,
+                    "score": stmt.excluded.score,
+                    "published_at": stmt.excluded.published_at,
+                    "updated_at": stmt.excluded.updated_at,
+                }
+
+                # Create the ON CONFLICT DO UPDATE statement
+                upsert_stmt = stmt.on_conflict_do_update(constraint="uq_source_external", set_=update_dict)
+
+            elif dialect == "sqlite":
+                stmt = sqlite_insert(ContentItem).values(items_data)
+
+                # Define what to update on conflict
+                update_dict = {
+                    "title": stmt.excluded.title,
+                    "content": stmt.excluded.content,
+                    "url": stmt.excluded.url,
+                    "score": stmt.excluded.score,
+                    "published_at": stmt.excluded.published_at,
+                    "updated_at": stmt.excluded.updated_at,
+                }
+
+                # Create the ON CONFLICT DO UPDATE statement for SQLite
+                upsert_stmt = stmt.on_conflict_do_update(index_elements=["source_id", "external_id"], set_=update_dict)
+
+            else:
+                raise NotImplementedError(f"Batch upsert not supported for dialect: {dialect}")
+
+            # Pre-count existing items before executing the upsert
+            pairs = [(item["source_id"], item["external_id"]) for item in items_data]
+            existing_count = 0
+            if pairs:
+                conditions = [
+                    and_(
+                        ContentItem.source_id == source_id,
+                        ContentItem.external_id == external_id,
+                    )
+                    for source_id, external_id in pairs
+                ]
+                pre_count_stmt = select(func.count()).select_from(ContentItem).where(or_(*conditions))
+                existing_count = (await self.db.execute(pre_count_stmt)).scalar() or 0
 
             # Execute the upsert and get results
             result = await self.db.execute(upsert_stmt)
             await self.db.commit()
 
-            # Calculate statistics
-            # Note: PostgreSQL doesn't directly tell us new vs updated counts
-            # We'll use a separate query to get approximate counts
-            new_count, updated_count = await self._calculate_upsert_stats(items_data, result.rowcount)
+            # Calculate stats correctly
+            affected = result.rowcount or 0
+            updated = min(existing_count, affected)
+            new = max(0, affected - updated)  # Use max to prevent negative numbers
 
             stats = {
-                "new": new_count,
-                "updated": updated_count,
+                "new": new,
+                "updated": updated,
                 "failed": 0,  # No failures if we reach here
             }
 
@@ -105,42 +140,6 @@ class IngestionService:
             logger.error(f"Batch upsert failed: {str(e)}")
             # Return all as failed
             return {"new": 0, "updated": 0, "failed": len(items)}
-
-    async def _calculate_upsert_stats(self, items_data: list[dict[str, Any]], total_affected: int) -> tuple[int, int]:
-        """
-        Calculate approximate new vs updated counts after upsert.
-
-        This is a best-effort calculation since PostgreSQL's ON CONFLICT
-        doesn't directly provide these statistics.
-        """
-        try:
-            # Count existing items that match our upsert criteria
-            source_external_pairs = [(item["source_id"], item["external_id"]) for item in items_data]
-
-            # Build a query to count existing items securely using SQLAlchemy expressions
-            from app.models.items import ContentItem
-
-            if source_external_pairs:
-                conditions = [
-                    and_(ContentItem.source_id == source_id, ContentItem.external_id == external_id)
-                    for source_id, external_id in source_external_pairs
-                ]
-                stmt = select(func.count().label("existing_count")).select_from(ContentItem).where(or_(*conditions))
-
-                result = await self.db.execute(stmt)
-                existing_count = result.scalar() or 0
-
-                # Approximate calculation
-                updated_count = min(existing_count, total_affected)
-                new_count = total_affected - updated_count
-
-                return new_count, updated_count
-
-        except Exception as e:
-            logger.warning(f"Could not calculate upsert stats: {e}")
-
-        # Fallback: assume all are new if we can't determine
-        return total_affected, 0
 
     async def create_ingestion_run(self, source_id: int, started_at: datetime | None = None) -> IngestionRun:
         """

@@ -4,9 +4,11 @@ from loguru import logger
 
 from app.core.extractors.base import RawItem
 from app.core.normalizers.base import ContentNormalizer, NormalizationError
+from app.core.registry import register_normalizer
 from app.schemas.items import ContentItemCreate
 
 
+@register_normalizer("hackernews")
 class HackerNewsNormalizer(ContentNormalizer):
     """HackerNews-specific normalizer with custom field mapping and validation."""
 
@@ -187,6 +189,7 @@ class HackerNewsNormalizer(ContentNormalizer):
         return content.strip()
 
 
+@register_normalizer("generic")
 class GenericContentNormalizer(ContentNormalizer):
     """Generic content normalizer for sources without specific requirements."""
 
@@ -203,23 +206,253 @@ class GenericContentNormalizer(ContentNormalizer):
         return super().normalize(raw_item)
 
 
-def get_normalizer(source_name: str, source_id: int) -> ContentNormalizer:
-    """
-    Factory function to get the appropriate normalizer for a source.
+@register_normalizer("reddit")
+class RedditNormalizer(ContentNormalizer):
+    """Reddit-specific normalizer with custom field mapping and validation."""
 
-    Args:
-        source_name: Name of the data source
-        source_id: ID of the data source
+    def normalize(self, raw_item: RawItem) -> ContentItemCreate:
+        """
+        Normalize a Reddit RawItem with Reddit-specific logic.
 
-    Returns:
-        Appropriate normalizer instance
-    """
-    normalizer_map = {
-        "hackernews": HackerNewsNormalizer,
-        "reddit": GenericContentNormalizer,  # TODO: Implement RedditNormalizer
-        "github": GenericContentNormalizer,  # TODO: Implement GitHubNormalizer
-        "producthunt": GenericContentNormalizer,  # TODO: Implement ProductHuntNormalizer
-    }
+        Args:
+            raw_item: Raw item from Reddit extractor
 
-    normalizer_class = normalizer_map.get(source_name.lower(), GenericContentNormalizer)
-    return normalizer_class(source_id)
+        Returns:
+            Normalized ContentItemCreate object
+
+        Raises:
+            NormalizationError: If normalization fails
+        """
+        try:
+            # Call parent normalization first
+            normalized_item = super().normalize(raw_item)
+
+            # Apply Reddit-specific transformations
+            normalized_item = self._apply_reddit_transformations(normalized_item, raw_item)
+
+            return normalized_item
+
+        except NormalizationError:
+            raise
+        except Exception as e:
+            raise NormalizationError(f"Reddit normalization failed: {e}", raw_item.external_id, e)
+
+    def _apply_reddit_transformations(
+        self,
+        normalized_item: ContentItemCreate,
+        raw_item: RawItem,
+    ) -> ContentItemCreate:
+        """
+        Apply Reddit-specific transformations to the normalized item.
+
+        Args:
+            normalized_item: Base normalized item
+            raw_item: Original raw item for reference
+
+        Returns:
+            Transformed ContentItemCreate object
+        """
+        raw_data = raw_item.raw_data
+
+        # Handle Reddit URL logic (prefer permalink for discussions)
+        url = self._normalize_reddit_url(normalized_item.url, raw_data)
+
+        # Handle Reddit content (selftext field)
+        content = self._normalize_reddit_content(normalized_item.content, raw_data)
+
+        # Handle Reddit score (upvotes)
+        score = self._normalize_reddit_score(normalized_item.score, raw_data)
+
+        return ContentItemCreate(
+            source_id=normalized_item.source_id,
+            external_id=normalized_item.external_id,
+            title=normalized_item.title,
+            content=content,
+            url=url,
+            score=score,
+            published_at=normalized_item.published_at,
+        )
+
+    def _normalize_reddit_url(self, url: str, raw_data: dict[str, Any]) -> str:
+        """Normalize Reddit URL, preferring Reddit permalink for discussions."""
+        # For self posts, use Reddit permalink
+        if raw_data.get("is_self"):
+            permalink = raw_data.get("permalink")
+            if permalink:
+                return f"https://reddit.com{permalink}"
+        return url
+
+    def _normalize_reddit_content(self, content: str | None, raw_data: dict[str, Any]) -> str | None:
+        """Normalize Reddit content from selftext field."""
+        # Reddit uses 'selftext' for post content
+        selftext = raw_data.get("selftext")
+        if selftext and selftext.strip():
+            return selftext.strip()
+        return content
+
+    def _normalize_reddit_score(self, score: int | None, raw_data: dict[str, Any]) -> int | None:
+        """Normalize Reddit score (upvotes)."""
+        # Reddit scores can be negative, which is normal
+        return score
+
+
+@register_normalizer("github")
+class GitHubNormalizer(ContentNormalizer):
+    """GitHub-specific normalizer with custom field mapping and validation."""
+
+    def normalize(self, raw_item: RawItem) -> ContentItemCreate:
+        """
+        Normalize a GitHub RawItem with GitHub-specific logic.
+
+        Args:
+            raw_item: Raw item from GitHub extractor
+
+        Returns:
+            Normalized ContentItemCreate object
+
+        Raises:
+            NormalizationError: If normalization fails
+        """
+        try:
+            # Call parent normalization first
+            normalized_item = super().normalize(raw_item)
+
+            # Apply GitHub-specific transformations
+            normalized_item = self._apply_github_transformations(normalized_item, raw_item)
+
+            return normalized_item
+
+        except NormalizationError:
+            raise
+        except Exception as e:
+            raise NormalizationError(f"GitHub normalization failed: {e}", raw_item.external_id, e)
+
+    def _apply_github_transformations(
+        self,
+        normalized_item: ContentItemCreate,
+        raw_item: RawItem,
+    ) -> ContentItemCreate:
+        """
+        Apply GitHub-specific transformations to the normalized item.
+
+        Args:
+            normalized_item: Base normalized item
+            raw_item: Original raw item for reference
+
+        Returns:
+            Transformed ContentItemCreate object
+        """
+        raw_data = raw_item.raw_data
+
+        # Handle GitHub content (description field)
+        content = self._normalize_github_content(normalized_item.content, raw_data)
+
+        # Handle GitHub score (stars)
+        score = self._normalize_github_score(normalized_item.score, raw_data)
+
+        return ContentItemCreate(
+            source_id=normalized_item.source_id,
+            external_id=normalized_item.external_id,
+            title=normalized_item.title,
+            content=content,
+            url=normalized_item.url,
+            score=score,
+            published_at=normalized_item.published_at,
+        )
+
+    def _normalize_github_content(self, content: str | None, raw_data: dict[str, Any]) -> str | None:
+        """Normalize GitHub content from description field."""
+        # GitHub uses 'description' for repository description
+        description = raw_data.get("description")
+        if description and description.strip():
+            return description.strip()
+        return content
+
+    def _normalize_github_score(self, score: int | None, raw_data: dict[str, Any]) -> int | None:
+        """Normalize GitHub score (stargazers_count)."""
+        # GitHub stars should be non-negative
+        if score is not None and score < 0:
+            logger.warning(f"Negative GitHub stars {score} for repo {raw_data.get('full_name')}, setting to 0")
+            score = 0
+        return score
+
+
+@register_normalizer("producthunt")
+class ProductHuntNormalizer(ContentNormalizer):
+    """ProductHunt-specific normalizer with custom field mapping and validation."""
+
+    def normalize(self, raw_item: RawItem) -> ContentItemCreate:
+        """
+        Normalize a ProductHunt RawItem with ProductHunt-specific logic.
+
+        Args:
+            raw_item: Raw item from ProductHunt extractor
+
+        Returns:
+            Normalized ContentItemCreate object
+
+        Raises:
+            NormalizationError: If normalization fails
+        """
+        try:
+            # Call parent normalization first
+            normalized_item = super().normalize(raw_item)
+
+            # Apply ProductHunt-specific transformations
+            normalized_item = self._apply_producthunt_transformations(normalized_item, raw_item)
+
+            return normalized_item
+
+        except NormalizationError:
+            raise
+        except Exception as e:
+            raise NormalizationError(f"ProductHunt normalization failed: {e}", raw_item.external_id, e)
+
+    def _apply_producthunt_transformations(
+        self,
+        normalized_item: ContentItemCreate,
+        raw_item: RawItem,
+    ) -> ContentItemCreate:
+        """
+        Apply ProductHunt-specific transformations to the normalized item.
+
+        Args:
+            normalized_item: Base normalized item
+            raw_item: Original raw item for reference
+
+        Returns:
+            Transformed ContentItemCreate object
+        """
+        raw_data = raw_item.raw_data
+
+        # Handle ProductHunt content (tagline field)
+        content = self._normalize_producthunt_content(normalized_item.content, raw_data)
+
+        # Handle ProductHunt score (votes_count)
+        score = self._normalize_producthunt_score(normalized_item.score, raw_data)
+
+        return ContentItemCreate(
+            source_id=normalized_item.source_id,
+            external_id=normalized_item.external_id,
+            title=normalized_item.title,
+            content=content,
+            url=normalized_item.url,
+            score=score,
+            published_at=normalized_item.published_at,
+        )
+
+    def _normalize_producthunt_content(self, content: str | None, raw_data: dict[str, Any]) -> str | None:
+        """Normalize ProductHunt content from tagline field."""
+        # ProductHunt uses 'tagline' for product description
+        tagline = raw_data.get("tagline")
+        if tagline and tagline.strip():
+            return tagline.strip()
+        return content
+
+    def _normalize_producthunt_score(self, score: int | None, raw_data: dict[str, Any]) -> int | None:
+        """Normalize ProductHunt score (votes_count)."""
+        # ProductHunt votes should be non-negative
+        if score is not None and score < 0:
+            logger.warning(f"Negative ProductHunt votes {score} for product {raw_data.get('name')}, setting to 0")
+            score = 0
+        return score

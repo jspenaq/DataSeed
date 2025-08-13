@@ -6,6 +6,10 @@ sources:
     config:
       items_endpoint: "/topstories.json"
       detail_endpoint: "/item/{id}.json"
+      client:
+        retries: 5
+        timeout: 15.0
+        semaphore_size: 8
   - name: reddit
     type: api
     base_url: "https://oauth.reddit.com"

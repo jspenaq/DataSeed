@@ -18,3 +18,6 @@ class Source(Base, TimestampMixin):
     # Relationships
     items = relationship("ContentItem", back_populates="source")
     ingestion_runs = relationship("IngestionRun", back_populates="source")
+
+    def __repr__(self) -> str:
+        return f"<Source(id={self.id}, name='{self.name}')>"

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Seed script to populate the sources table with initial data.
+Seed script to populate the sources table with initial data from YAML configuration.
 
-This script creates the four main data sources (HackerNews, Reddit, GitHub, ProductHunt)
-with their proper API endpoints and rate limits. It's idempotent and can be run multiple times safely.
+This script reads source definitions from config/sources.yaml and creates the data sources
+(HackerNews, Reddit, GitHub, ProductHunt) with their proper API endpoints and rate limits.
+It's idempotent and can be run multiple times safely.
 """
 
 import sys
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
@@ -30,58 +33,37 @@ def create_sync_engine() -> Engine:
     return create_engine(sync_url, echo=True)
 
 
-def get_sources_data() -> list[dict[str, Any]]:
-    """Return the sources data to be seeded."""
-    return [
-        {
-            "name": "hackernews",
-            "type": "api",
-            "base_url": "https://hacker-news.firebaseio.com/v0",
-            "rate_limit": 600,
-            "config": {"items_endpoint": "/topstories.json", "detail_endpoint": "/item/{id}.json"},
-            "is_active": True,
-        },
-        {
-            "name": "reddit",
-            "type": "api",
-            "base_url": "https://oauth.reddit.com",
-            "rate_limit": 60,
-            "config": {
-                "subreddit": "all",
-                "client_id": "${REDDIT_CLIENT_ID}",
-                "client_secret": "${REDDIT_CLIENT_SECRET}",
-            },
-            "is_active": True,
-        },
-        {
-            "name": "github",
-            "type": "api",
-            "base_url": "https://api.github.com",
-            "rate_limit": 5000,
-            "config": {"search_endpoint": "/search/repositories", "token": "${GITHUB_TOKEN}"},
-            "is_active": True,
-        },
-        {
-            "name": "producthunt",
-            "type": "api",
-            "base_url": "https://api.producthunt.com/v2",
-            "rate_limit": 500,
-            "config": {"token": "${PRODUCTHUNT_TOKEN}"},
-            "is_active": True,
-        },
-    ]
+def load_sources_from_yaml() -> list[dict[str, Any]]:
+    """Load sources data from the YAML configuration file."""
+    # Construct the path to the YAML file relative to the script
+    config_path = Path(__file__).parent.parent / "config" / "sources.yaml"
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Configuration file not found at {config_path}")
+
+    with open(config_path) as f:
+        sources_data = yaml.safe_load(f)
+
+    # Extract the sources list from the YAML structure
+    sources_list = sources_data.get("sources", [])
+
+    # Add is_active=True to each source since it's not in the YAML but needed for the database
+    for source in sources_list:
+        source["is_active"] = True
+
+    return sources_list
 
 
 def seed_sources(session: Session) -> None:
     """
-    Seed the sources table with initial data.
+    Seed the sources table with initial data from YAML configuration.
 
     Args:
         session: SQLAlchemy session
     """
-    sources_data = get_sources_data()
+    sources_data = load_sources_from_yaml()
 
-    print(f"Seeding {len(sources_data)} sources...")
+    print(f"Seeding {len(sources_data)} sources from YAML configuration...")
 
     for source_data in sources_data:
         # Check if source already exists
@@ -104,7 +86,7 @@ def seed_sources(session: Session) -> None:
 
 def main() -> None:
     """Main function to run the seeding process."""
-    print("Starting sources seeding process...")
+    print("Starting sources seeding process from YAML configuration...")
 
     # Create engine and session
     engine = create_sync_engine()

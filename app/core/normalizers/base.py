@@ -133,6 +133,11 @@ class BaseNormalizer(ABC, Generic[InputType, OutputType]):
         return None
 
 
+# Import here to avoid circular imports
+from app.core.registry import register_normalizer
+
+
+@register_normalizer("default")
 class ContentNormalizer(BaseNormalizer[RawItem, ContentItemCreate]):
     """Normalizer for converting RawItem to ContentItemCreate."""
 

@@ -21,6 +21,9 @@ class ContentItem(Base, TimestampMixin):
     # Relationships
     source = relationship("Source", back_populates="items")
 
+    def __repr__(self) -> str:
+        return f"<ContentItem(id={self.id}, source_id={self.source_id}, external_id='{self.external_id}')>"
+
     # Constraints and Indexes
     __table_args__ = (
         UniqueConstraint("source_id", "external_id", name="uq_source_external"),

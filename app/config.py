@@ -1,4 +1,15 @@
+from importlib import metadata
+
 from pydantic_settings import BaseSettings
+
+
+def get_app_version() -> str:
+    """Get the application version from package metadata."""
+    try:
+        return metadata.version("dataseed")
+    except metadata.PackageNotFoundError:
+        # Fallback for development environments where package isn't installed
+        return "0.0.0-dev"
 
 
 class Settings(BaseSettings):
@@ -12,6 +23,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     API_V1_STR: str = "/api/v1"
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    APP_VERSION: str = get_app_version()
 
     class Config:
         env_file = ".env"

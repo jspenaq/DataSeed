@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Import core module to trigger registry auto-discovery
+import app.core  # noqa: F401
 from app.api.v1 import health, items
 from app.config import settings
 

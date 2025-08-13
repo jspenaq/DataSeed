@@ -1,19 +1,27 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi import status as http_status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import check_database_connection, get_db
-from app.core.redis import check_redis_connection
+from app.api.deps import get_db
+from app.config import settings
+from app.core.health_checks import check_database_connection, check_redis_connection
 from app.schemas.common import HealthCheckResult, HealthResponse
 
 router = APIRouter()
 
 
-@router.get("/health", response_model=HealthResponse, status_code=200)
-async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse:
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Service is healthy"},
+        503: {"description": "Service is unhealthy but returning detailed component status"},
+    },
+)
+async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse | Response:
     """
     Comprehensive health check endpoint.
 
@@ -26,7 +34,7 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse:
         HealthResponse: Health status of all components
     """
     # Check database connection
-    db_healthy = await check_database_connection()
+    db_healthy = await check_database_connection(db)
     db_result = HealthCheckResult(
         status="healthy" if db_healthy else "unhealthy",
         details={"connected": db_healthy},
@@ -53,22 +61,25 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse:
     all_healthy = all(check.status == "healthy" for check in checks.values())
     any_unhealthy = any(check.status == "unhealthy" for check in checks.values())
 
-    status: Literal["healthy", "degraded", "unhealthy"]
+    health_status: Literal["healthy", "degraded", "unhealthy"]
     if all_healthy:
-        status = "healthy"
+        health_status = "healthy"
     elif any_unhealthy and db_healthy:  # If DB is healthy but something else isn't, we're degraded
-        status = "degraded"
+        health_status = "degraded"
     else:  # If DB is unhealthy, the whole system is unhealthy
-        status = "unhealthy"
-        # Return 503 Service Unavailable if the system is unhealthy
-        raise HTTPException(
-            status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service is unhealthy",
-        )
+        health_status = "unhealthy"
 
-    return HealthResponse(
-        status=status,
+    response_model = HealthResponse(
+        status=health_status,
         timestamp=datetime.utcnow(),
-        version="0.1.0",  # This could be pulled from a version file or environment variable
+        version=settings.APP_VERSION,
         checks=checks,
+    )
+
+    # Return 503 Service Unavailable if the system is degraded or unhealthy
+    status_code = status.HTTP_200_OK if health_status == "healthy" else status.HTTP_503_SERVICE_UNAVAILABLE
+    return Response(
+        content=response_model.model_dump_json(),
+        status_code=status_code,
+        media_type="application/json",
     )

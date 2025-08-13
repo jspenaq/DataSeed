@@ -5,7 +5,7 @@ Tests the actual database operations including batch upserts,
 constraint handling, and transaction behavior.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -48,7 +48,7 @@ class TestIngestionPersistence:
     @pytest_asyncio.fixture
     async def sample_items_data(self, test_source):
         """Create sample ContentItemCreate objects."""
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         return [
             ContentItemCreate(
                 source_id=test_source.id,
@@ -226,7 +226,7 @@ class TestIngestionPersistence:
             content="Original content",
             url="https://example.com/original",
             score=100,
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
         )
 
         # First insert should succeed
@@ -241,7 +241,7 @@ class TestIngestionPersistence:
             content="Updated content",
             url="https://example.com/updated",
             score=200,
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
         )
 
         stats2 = await ingestion_service.batch_upsert_items([item2])
@@ -265,13 +265,13 @@ class TestIngestionPersistence:
     ):
         """Test complete ingestion run lifecycle."""
         # Create ingestion run
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
         run = await ingestion_service.create_ingestion_run(source_id=test_source.id, started_at=started_at)
 
         assert run.id is not None
         assert run.source_id == test_source.id
         # Compare without timezone info since SQLite doesn't store timezone
-        assert run.started_at.replace(tzinfo=timezone.utc) == started_at
+        assert run.started_at.replace(tzinfo=UTC) == started_at
         assert run.status == "started"
         assert run.completed_at is None
         assert run.is_running is True
@@ -380,8 +380,8 @@ class TestIngestionPersistence:
     ):
         """Test getting the latest ingestion run."""
         # Create runs with different start times
-        old_time = datetime.now(timezone.utc) - timedelta(hours=2)
-        recent_time = datetime.now(timezone.utc) - timedelta(minutes=30)
+        old_time = datetime.now(UTC) - timedelta(hours=2)
+        recent_time = datetime.now(UTC) - timedelta(minutes=30)
 
         old_run = await ingestion_service.create_ingestion_run(test_source.id, started_at=old_time)
         recent_run = await ingestion_service.create_ingestion_run(test_source.id, started_at=recent_time)
@@ -391,7 +391,7 @@ class TestIngestionPersistence:
         assert latest is not None
         assert latest.id == recent_run.id
         # Compare without timezone info since SQLite doesn't store timezone
-        assert latest.started_at.replace(tzinfo=timezone.utc) == recent_time
+        assert latest.started_at.replace(tzinfo=UTC) == recent_time
 
         # Test with status filter
         await ingestion_service.update_ingestion_run(old_run.id, status="completed")
@@ -445,6 +445,7 @@ class TestIngestionPersistence:
         """Test that transactions are properly rolled back on errors."""
         # This test verifies error handling behavior by mocking a database error
         from unittest.mock import patch
+
         from sqlalchemy.exc import SQLAlchemyError
 
         # First, let's verify the database is clean
@@ -461,7 +462,7 @@ class TestIngestionPersistence:
                 content="Test content",
                 url="https://example.com/test",
                 score=100,
-                published_at=datetime.now(timezone.utc),
+                published_at=datetime.now(UTC),
             ),
         ]
 
@@ -498,7 +499,7 @@ class TestIngestionPersistence:
             content="Test content",
             url="https://example.com/concurrent",
             score=100,
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
         )
 
         # Perform multiple upserts of the same item
@@ -516,3 +517,136 @@ class TestIngestionPersistence:
         result = await db_session.execute(items_stmt)
         items = result.scalars().all()
         assert len(items) == 1
+
+    @pytest.mark.asyncio
+    async def test_batch_upsert_produces_correct_stats(
+        self,
+        db_session: AsyncSession,
+        ingestion_service: IngestionService,
+        test_source,
+    ):
+        """Test that batch_upsert_items correctly calculates new vs updated item counts."""
+        # ARRANGE: Insert 2 initial items using the ingestion service to ensure consistency
+        base_time = datetime.now(UTC)
+
+        initial_items = [
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-1",
+                title="Original Title 1",
+                content="Original content 1",
+                url="https://example.com/item/1",
+                score=100,
+                published_at=base_time - timedelta(hours=2),
+            ),
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-2",
+                title="Original Title 2",
+                content="Original content 2",
+                url="https://example.com/item/2",
+                score=200,
+                published_at=base_time - timedelta(hours=1),
+            ),
+        ]
+
+        # Insert initial items using the ingestion service
+        initial_stats = await ingestion_service.batch_upsert_items(initial_items)
+        assert initial_stats["new"] == 2
+        assert initial_stats["updated"] == 0
+        assert initial_stats["failed"] == 0
+
+        # ARRANGE: Prepare data for upsert (2 existing items + 3 new items)
+        items_to_upsert = [
+            # These 2 items already exist and should be updated
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-1",
+                title="Updated Title 1",
+                content="Updated content 1",
+                url="https://example.com/item/1",
+                score=150,
+                published_at=base_time - timedelta(hours=2),
+            ),
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-2",
+                title="Updated Title 2",
+                content="Updated content 2",
+                url="https://example.com/item/2",
+                score=250,
+                published_at=base_time - timedelta(hours=1),
+            ),
+            # These 3 items are new and should be inserted
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-3",
+                title="New Title 3",
+                content="New content 3",
+                url="https://example.com/item/3",
+                score=300,
+                published_at=base_time,
+            ),
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-4",
+                title="New Title 4",
+                content="New content 4",
+                url="https://example.com/item/4",
+                score=400,
+                published_at=base_time,
+            ),
+            ContentItemCreate(
+                source_id=test_source.id,
+                external_id="ext-5",
+                title="New Title 5",
+                content="New content 5",
+                url="https://example.com/item/5",
+                score=500,
+                published_at=base_time,
+            ),
+        ]
+
+        # ACT: Run the batch upsert
+        stats = await ingestion_service.batch_upsert_items(items_to_upsert)
+
+        # ASSERT: Check the statistics are correct
+        assert stats["new"] == 3, f"Expected 3 new items, got {stats['new']}"
+        assert stats["updated"] == 2, f"Expected 2 updated items, got {stats['updated']}"
+        assert stats["failed"] == 0, f"Expected 0 failed items, got {stats['failed']}"
+
+        # ASSERT: Verify total count in database is correct
+        total_count_result = await db_session.execute(select(func.count(ContentItem.id)))
+        total_count = total_count_result.scalar_one()
+        assert total_count == 5, f"Expected 5 total items in database, got {total_count}"
+
+        # Refresh the session to ensure we see the latest data
+        await db_session.commit()
+
+        # ASSERT: Verify that existing items were actually updated
+        updated_items_stmt = (
+            select(ContentItem).where(ContentItem.external_id.in_(["ext-1", "ext-2"])).order_by(ContentItem.external_id)
+        )
+        result = await db_session.execute(updated_items_stmt)
+        updated_items = result.scalars().all()
+
+        assert len(updated_items) == 2
+        assert updated_items[0].title == "Updated Title 1"
+        assert updated_items[0].score == 150
+        assert updated_items[1].title == "Updated Title 2"
+        assert updated_items[1].score == 250
+
+        # ASSERT: Verify that new items were created
+        new_items_stmt = (
+            select(ContentItem)
+            .where(ContentItem.external_id.in_(["ext-3", "ext-4", "ext-5"]))
+            .order_by(ContentItem.external_id)
+        )
+        result = await db_session.execute(new_items_stmt)
+        new_items = result.scalars().all()
+
+        assert len(new_items) == 3
+        assert new_items[0].external_id == "ext-3"
+        assert new_items[0].title == "New Title 3"
+        assert new_items[1].external_id == "ext-4"
+        assert new_items[2].external_id == "ext-5"

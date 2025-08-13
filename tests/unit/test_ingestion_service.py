@@ -6,7 +6,7 @@ ingestion run tracking, and error handling.
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,6 +30,12 @@ class TestIngestionService:
         session.rollback = AsyncMock()
         session.refresh = AsyncMock()
         session.execute = AsyncMock()
+
+        # Mock the database bind and dialect
+        session.bind = MagicMock()
+        session.bind.dialect = MagicMock()
+        session.bind.dialect.name = "postgresql"  # Default to postgresql for tests
+
         return session
 
     @pytest.fixture
@@ -69,21 +75,21 @@ class TestIngestionService:
 
     async def test_batch_upsert_items_success(self, ingestion_service, mock_db_session, sample_items):
         """Test successful batch upsert operation."""
-        # Mock the execute result
-        mock_result = MagicMock()
-        mock_result.rowcount = 2
-        mock_db_session.execute.return_value = mock_result
+        # Mock the pre-count query (for existing items)
+        mock_pre_count_result = MagicMock()
+        mock_pre_count_result.scalar.return_value = 0  # No existing items
 
-        # Mock the stats calculation
-        with patch.object(
-            ingestion_service,
-            "_calculate_upsert_stats",
-            return_value=(2, 0),  # 2 new, 0 updated
-        ):
-            result = await ingestion_service.batch_upsert_items(sample_items)
+        # Mock the upsert execution result
+        mock_upsert_result = MagicMock()
+        mock_upsert_result.rowcount = 2  # 2 items affected
+
+        # Set up the execute method to return different results for different calls
+        mock_db_session.execute.side_effect = [mock_pre_count_result, mock_upsert_result]
+
+        result = await ingestion_service.batch_upsert_items(sample_items)
 
         assert result == {"new": 2, "updated": 0, "failed": 0}
-        mock_db_session.execute.assert_called_once()
+        assert mock_db_session.execute.call_count == 2  # Pre-count + upsert
         mock_db_session.commit.assert_called_once()
 
     async def test_batch_upsert_items_database_error(self, ingestion_service, mock_db_session, sample_items):
@@ -264,39 +270,43 @@ class TestIngestionService:
         assert result["hours_covered"] == 24
         mock_db_session.execute.assert_called_once()
 
-    async def test_calculate_upsert_stats(self, ingestion_service, mock_db_session):
-        """Test calculation of upsert statistics."""
-        items_data = [
-            {"source_id": 1, "external_id": "item_1"},
-            {"source_id": 1, "external_id": "item_2"},
-            {"source_id": 1, "external_id": "item_3"},
-        ]
-        total_affected = 3
+    async def test_batch_upsert_items_with_existing_items(self, ingestion_service, mock_db_session, sample_items):
+        """Test batch upsert with some existing items."""
+        # Mock the pre-count query (1 existing item)
+        mock_pre_count_result = MagicMock()
+        mock_pre_count_result.scalar.return_value = 1  # 1 existing item
 
-        # Mock existing count query
-        mock_result = MagicMock()
-        mock_result.scalar.return_value = 1  # 1 existing item
-        mock_db_session.execute.return_value = mock_result
+        # Mock the upsert execution result
+        mock_upsert_result = MagicMock()
+        mock_upsert_result.rowcount = 2  # 2 items affected
 
-        new_count, updated_count = await ingestion_service._calculate_upsert_stats(items_data, total_affected)
+        # Set up the execute method to return different results for different calls
+        mock_db_session.execute.side_effect = [mock_pre_count_result, mock_upsert_result]
 
-        assert new_count == 2  # 3 total - 1 existing
-        assert updated_count == 1  # 1 existing
-        mock_db_session.execute.assert_called_once()
+        result = await ingestion_service.batch_upsert_items(sample_items)
 
-    async def test_calculate_upsert_stats_error_fallback(self, ingestion_service, mock_db_session):
-        """Test upsert stats calculation fallback on error."""
-        items_data = [{"source_id": 1, "external_id": "item_1"}]
-        total_affected = 1
+        assert result == {"new": 1, "updated": 1, "failed": 0}
+        assert mock_db_session.execute.call_count == 2  # Pre-count + upsert
+        mock_db_session.commit.assert_called_once()
 
-        # Mock database error
-        mock_db_session.execute.side_effect = SQLAlchemyError("Query error")
+    async def test_batch_upsert_items_all_existing(self, ingestion_service, mock_db_session, sample_items):
+        """Test batch upsert with all existing items (updates only)."""
+        # Mock the pre-count query (all items exist)
+        mock_pre_count_result = MagicMock()
+        mock_pre_count_result.scalar.return_value = 2  # 2 existing items
 
-        new_count, updated_count = await ingestion_service._calculate_upsert_stats(items_data, total_affected)
+        # Mock the upsert execution result
+        mock_upsert_result = MagicMock()
+        mock_upsert_result.rowcount = 2  # 2 items affected
 
-        # Should fallback to assuming all are new
-        assert new_count == 1
-        assert updated_count == 0
+        # Set up the execute method to return different results for different calls
+        mock_db_session.execute.side_effect = [mock_pre_count_result, mock_upsert_result]
+
+        result = await ingestion_service.batch_upsert_items(sample_items)
+
+        assert result == {"new": 0, "updated": 2, "failed": 0}
+        assert mock_db_session.execute.call_count == 2  # Pre-count + upsert
+        mock_db_session.commit.assert_called_once()
 
 
 class TestIngestionRunModel:

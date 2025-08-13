@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -8,6 +8,10 @@ from app.models.base import Base, TimestampMixin
 
 class IngestionRun(Base, TimestampMixin):
     __tablename__ = "ingestion_runs"
+    __table_args__ = (
+        Index("ix_ingestion_runs_source_id_started_at_desc", "source_id", desc("started_at")),
+        Index("ix_ingestion_runs_status_started_at_desc", "status", desc("started_at")),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), nullable=False)
@@ -24,6 +28,9 @@ class IngestionRun(Base, TimestampMixin):
 
     # Relationships
     source = relationship("Source", back_populates="ingestion_runs")
+
+    def __repr__(self) -> str:
+        return f"<IngestionRun(id={self.id}, source_id={self.source_id}, status='{self.status}')>"
 
     @property
     def duration_seconds(self) -> float | None:

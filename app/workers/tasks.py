@@ -3,9 +3,12 @@ Celery tasks for DataSeed ETL pipeline.
 
 This module contains all Celery tasks for data ingestion from various sources.
 Tasks are designed to be idempotent and include comprehensive error handling.
+The tasks follow the Dependency Inversion Principle by using factory functions
+to create extractors and normalizers dynamically based on source names.
 """
 
 import asyncio
+import concurrent.futures
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -15,145 +18,179 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.extractors.base import ExtractorConfig
-from app.core.extractors.hackernews import HackerNewsExtractor
-from app.core.normalizers.content import get_normalizer
+from app.core.registry import get_extractor, get_normalizer
 from app.core.services.ingestion import IngestionService
-from app.database import engine
 from app.models.source import Source
-from app.schemas.items import ContentItemCreate
+from app.workers.celery_app import celery_app
 
 
-@shared_task(name="ingest.hackernews")
-def ingest_hackernews_task() -> dict[str, Any]:
+@celery_app.task(bind=True, name="ingest.source")
+def ingest_source_task(self, source_name: str) -> dict[str, Any]:
     """
-    Celery task to ingest HackerNews data.
+    Generic Celery task to ingest data from any registered source.
 
-    This task orchestrates the complete HackerNews ETL pipeline:
-    1. Fetches recent items from HackerNews API
-    2. Normalizes and validates the data
+    This task orchestrates the complete ETL pipeline for any data source:
+    1. Fetches recent items from the source API using the appropriate extractor
+    2. Normalizes and validates the data using the appropriate normalizer
     3. Performs batch upsert to database
     4. Tracks ingestion run statistics
+
+    Args:
+        source_name: Name of the source to ingest (e.g., "hackernews", "reddit")
 
     Returns:
         Dict with ingestion statistics: processed, new, updated counts
     """
-    logger.info("Starting HackerNews ingestion task")
+    logger.info(f"Starting {source_name} ingestion task")
 
     try:
-        # Check if we're already in an event loop
-        try:
-            loop = asyncio.get_running_loop()
-            # If we're in a loop, create a task instead of using asyncio.run()
-            import concurrent.futures
+        # Check if an event loop is already running in the current thread
+        asyncio.get_running_loop()
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _ingest_hn_async())
-                result = future.result()
-        except RuntimeError:
-            # No running loop, safe to use asyncio.run()
-            result = asyncio.run(_ingest_hn_async())
+        # If so, it's safer to run the new event loop in a separate thread
+        # to avoid conflicts.
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # We submit a lambda that calls asyncio.run(), ensuring a clean event loop.
+            future = executor.submit(lambda: asyncio.run(_ingest_source_async(self, source_name)))
+            result = future.result()
 
-        logger.info("HackerNews ingestion task completed successfully", extra=result)
-        return result
+    except RuntimeError:
+        # If no event loop is running, we can safely start one.
+        result = asyncio.run(_ingest_source_async(self, source_name))
+
     except Exception as e:
-        logger.error(f"HackerNews ingestion task failed: {e}", exc_info=True)
+        logger.error(f"{source_name} ingestion task failed: {e}", exc_info=True)
         return {"processed": 0, "new": 0, "updated": 0, "error": str(e)}
 
+    log_extra = {
+        "source_name": source_name,
+        "processed": result["processed"],
+        "new": result["new"],
+        "updated": result["updated"],
+        "errors": result["errors"],
+    }
+    logger.info(f"{source_name} ingestion task completed successfully", extra=log_extra)
+    return result
 
-async def _ingest_hn_async() -> dict[str, Any]:
+
+async def _ingest_source_async(task_instance, source_name: str) -> dict[str, Any]:
     """
-    Async orchestration function for HackerNews ingestion.
+    Generic async orchestration function for source ingestion.
+
+    Args:
+        task_instance: The Celery task instance with db_session property
+        source_name: Name of the source to ingest
 
     Returns:
         Dict with ingestion statistics
     """
-    async with AsyncSession(engine) as session:
+    session = task_instance.db_session
+    try:
+        # 1) Locate source
+        source = await get_source_by_name(session, source_name)
+        if not source:
+            raise ValueError(f"{source_name} source not found in database")
+
+        # 2) Determine since timestamp
+        since = await get_last_since(session, source.id)
+        if not since:
+            since = datetime.now(UTC) - timedelta(hours=24)
+
+        logger.info(f"Fetching {source_name} items since {since}")
+
+        # 3) Start ingestion run
+        run_id = await _start_run(session, source.id)
+
         try:
-            # 1) Locate source
-            source = await get_source_by_name(session, "hackernews")
-            if not source:
-                raise ValueError("HackerNews source not found in database")
+            # 4) Extract data using factory-created extractor
+            # Refresh the source object to avoid lazy loading issues
+            await session.refresh(source)
 
-            # 2) Determine since timestamp
-            since = await get_last_since(session, source.id)
-            if not since:
-                since = datetime.now(UTC) - timedelta(hours=24)
+            extractor_config = ExtractorConfig(
+                base_url=source.base_url,
+                rate_limit=source.rate_limit,
+                config=source.config,
+            )
 
-            logger.info(f"Fetching HackerNews items since {since}")
+            # Use factory function to get the appropriate extractor
+            async with get_extractor(source_name, extractor_config) as extractor:
+                raw_items = await extractor.fetch_recent(since=since, limit=100)
 
-            # 3) Start ingestion run
-            run_id = await _start_run(session, source.id)
+            logger.info(f"Extracted {len(raw_items)} raw items from {source_name}")
 
-            try:
-                # 4) Extract data from HackerNews
-                # Refresh the source object to avoid lazy loading issues
-                await session.refresh(source)
+            # 5) Normalize data using factory-created normalizer
+            normalizer = get_normalizer(source_name, source.id)
+            normalized_items = []
+            normalization_errors = 0
 
-                extractor_config = ExtractorConfig(
-                    base_url=source.base_url, rate_limit=source.rate_limit, config=source.config,
-                )
+            for raw_item in raw_items:
+                try:
+                    normalized_item = normalizer.normalize(raw_item)
+                    normalized_items.append(normalized_item)
+                except Exception as e:
+                    logger.warning(f"Failed to normalize item {raw_item.external_id}: {e}")
+                    normalization_errors += 1
 
-                async with HackerNewsExtractor(extractor_config) as extractor:
-                    raw_items = await extractor.fetch_recent(since=since, limit=100)
+            logger.info(f"Normalized {len(normalized_items)} items ({normalization_errors} errors)")
 
-                logger.info(f"Extracted {len(raw_items)} raw items from HackerNews")
+            # 6) Upsert to database using service instantiated within task
+            ingestion_service = IngestionService(session)
+            upsert_stats = await ingestion_service.batch_upsert_items(normalized_items)
 
-                # 5) Normalize data
-                normalizer = get_normalizer("hackernews", source.id)
-                normalized_items = []
-                normalization_errors = 0
+            # 7) Complete ingestion run
+            await _finish_run(
+                session,
+                run_id,
+                items_processed=len(normalized_items),
+                items_new=upsert_stats["new"],
+                items_updated=upsert_stats["updated"],
+                errors=normalization_errors + upsert_stats["failed"],
+            )
 
-                for raw_item in raw_items:
-                    try:
-                        normalized_item = normalizer.normalize(raw_item)
-                        normalized_items.append(normalized_item)
-                    except Exception as e:
-                        logger.warning(f"Failed to normalize item {raw_item.external_id}: {e}")
-                        normalization_errors += 1
+            result = {
+                "processed": len(normalized_items),
+                "new": upsert_stats["new"],
+                "updated": upsert_stats["updated"],
+                "errors": normalization_errors + upsert_stats["failed"],
+            }
 
-                logger.info(f"Normalized {len(normalized_items)} items ({normalization_errors} errors)")
+            logger.info(
+                f"{source_name} ingestion completed successfully",
+                extra={
+                    "source": source_name,
+                    "processed": result["processed"],
+                    "new": result["new"],
+                    "updated": result["updated"],
+                    "errors": result["errors"],
+                },
+            )
 
-                # 6) Upsert to database
-                ingestion_service = IngestionService(session)
-                upsert_stats = await ingestion_service.batch_upsert_items(normalized_items, ingestion_run_id=run_id)
-
-                # 7) Complete ingestion run
-                await _finish_run(
-                    session,
-                    run_id,
-                    items_processed=len(normalized_items),
-                    items_new=upsert_stats["new"],
-                    items_updated=upsert_stats["updated"],
-                    errors=normalization_errors + upsert_stats["failed"],
-                )
-
-                result = {
-                    "processed": len(normalized_items),
-                    "new": upsert_stats["new"],
-                    "updated": upsert_stats["updated"],
-                    "errors": normalization_errors + upsert_stats["failed"],
-                }
-
-                logger.info(
-                    "HN ingestion completed successfully",
-                    extra={
-                        "processed": result["processed"],
-                        "new": result["new"],
-                        "updated": result["updated"],
-                        "errors": result["errors"],
-                    },
-                )
-
-                return result
-
-            except Exception as e:
-                # Mark run as failed
-                await _fail_run(session, run_id, str(e))
-                raise
+            return result
 
         except Exception as e:
-            logger.error(f"HackerNews ingestion failed: {e}", exc_info=True)
+            # Mark run as failed
+            await _fail_run(session, run_id, str(e))
             raise
+
+    except Exception as e:
+        logger.error(f"{source_name} ingestion failed: {e}", exc_info=True)
+        raise
+
+
+# Backward compatibility task for HackerNews
+@shared_task(name="ingest.hackernews")
+def ingest_hackernews_task() -> dict[str, Any]:
+    """
+    Backward compatibility wrapper for HackerNews ingestion.
+
+    This task is kept for backward compatibility but delegates to the generic
+    ingest_source_task with "hackernews" as the source name.
+
+    Returns:
+        Dict with ingestion statistics: processed, new, updated counts
+    """
+    # Use the celery_app.task decorator to call the bound task properly
+    return ingest_source_task.apply(args=["hackernews"]).get()
 
 
 async def get_source_by_name(session: AsyncSession, name: str) -> Source | None:
@@ -168,7 +205,7 @@ async def get_source_by_name(session: AsyncSession, name: str) -> Source | None:
         Source instance or None if not found
     """
     try:
-        stmt = select(Source).where(Source.name == name, Source.is_active == True)
+        stmt = select(Source).where(Source.name == name, Source.is_active.is_(True))
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
     except Exception as e:
@@ -241,7 +278,12 @@ async def _start_run(session: AsyncSession, source_id: int) -> int:
 
 
 async def _finish_run(
-    session: AsyncSession, run_id: int, items_processed: int, items_new: int, items_updated: int, errors: int,
+    session: AsyncSession,
+    run_id: int,
+    items_processed: int,
+    items_new: int,
+    items_updated: int,
+    errors: int,
 ) -> None:
     """
     Mark an ingestion run as completed with final statistics.
@@ -300,29 +342,3 @@ async def _fail_run(session: AsyncSession, run_id: int, error_message: str) -> N
 
     except Exception as e:
         logger.error(f"Failed to mark ingestion run {run_id} as failed: {e}")
-
-
-def _normalize_hn(raw_item: dict[str, Any], source_id: int) -> ContentItemCreate:
-    """
-    Helper function to normalize a single HackerNews item.
-
-    This function is kept for compatibility with the PRD specification,
-    but the actual normalization is handled by the normalizer classes.
-
-    Args:
-        raw_item: Raw item data from HackerNews
-        source_id: ID of the HackerNews source
-
-    Returns:
-        Normalized ContentItemCreate object
-    """
-    # This function is deprecated in favor of the normalizer classes
-    # but kept for backward compatibility
-    from app.core.extractors.base import RawItem
-
-    # Convert dict to RawItem first
-    raw_item_obj = RawItem(**raw_item)
-
-    # Use the normalizer
-    normalizer = get_normalizer("hackernews", source_id)
-    return normalizer.normalize(raw_item_obj)
