@@ -59,24 +59,26 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### API Usage
 
-Here are a few examples of how to query the API using `curl`:
+The DataSeed API provides several endpoints for accessing content items, statistics, and trending data. Here are comprehensive examples using `curl`:
 
-**1. Get the latest items from all sources:**
+#### Content Items Endpoints
+
+**1. Get the latest items from all sources (offset pagination):**
 
 ```sh
 curl http://localhost:8000/api/v1/items/
 ```
 
-**2. Get the latest items from a specific source (e.g., HackerNews):**
+**2. Get the latest items from a specific source:**
 
 ```sh
 curl http://localhost:8000/api/v1/items/?source_name=hackernews
 ```
 
-**3. Search for items with a query (e.g., "AI"):**
+**3. Search for items with a query:**
 
 ```sh
-curl http://localhost:8000/api/v1/items/?q=AI
+curl http://localhost:8000/api/v1/items/?q=artificial%20intelligence
 ```
 
 **4. Paginate results (get 5 items, skipping the first 10):**
@@ -90,6 +92,106 @@ curl http://localhost:8000/api/v1/items/?limit=5&offset=10
 ```sh
 curl http://localhost:8000/api/v1/items/?source_name=github&q=Python
 ```
+
+**6. Get items using cursor-based pagination (recommended for large datasets):**
+
+```sh
+curl http://localhost:8000/api/v1/items/cursor
+```
+
+**7. Get next page using cursor from previous response:**
+
+```sh
+curl "http://localhost:8000/api/v1/items/cursor?cursor=MjAyNC0wMS0xNVQxMDozMDowMFo6MTIzNDU%3D"
+```
+
+**8. Search with cursor pagination:**
+
+```sh
+curl "http://localhost:8000/api/v1/items/cursor?q=machine%20learning&limit=10"
+```
+
+#### Statistics Endpoints
+
+**9. Get overall statistics for the last 24 hours:**
+
+```sh
+curl http://localhost:8000/api/v1/items/stats
+```
+
+**10. Get statistics for a specific time window (7 days):**
+
+```sh
+curl http://localhost:8000/api/v1/items/stats?window=7d
+```
+
+**11. Get statistics for a specific source:**
+
+```sh
+curl http://localhost:8000/api/v1/items/stats?source_name=hackernews&window=24h
+```
+
+#### Trending Items Endpoints
+
+**12. Get trending items from the last 24 hours:**
+
+```sh
+curl http://localhost:8000/api/v1/items/trending
+```
+
+**13. Get trending items from the last week:**
+
+```sh
+curl http://localhost:8000/api/v1/items/trending?window=7d
+```
+
+**14. Get trending items using hot score algorithm:**
+
+```sh
+curl http://localhost:8000/api/v1/items/trending?use_hot_score=true&window=24h
+```
+
+**15. Get trending items from a specific source:**
+
+```sh
+curl http://localhost:8000/api/v1/items/trending?source_name=reddit&window=24h&limit=10
+```
+
+#### Health and Sources Endpoints
+
+**16. Check API health:**
+
+```sh
+curl http://localhost:8000/api/v1/health
+```
+
+**17. Get available data sources:**
+
+```sh
+curl http://localhost:8000/api/v1/sources
+```
+
+**18. Get overall system statistics:**
+
+```sh
+curl http://localhost:8000/api/v1/stats
+```
+
+#### Advanced Examples
+
+**19. Complex filtering with multiple parameters:**
+
+```sh
+curl "http://localhost:8000/api/v1/items/?source_name=hackernews&q=AI&limit=20&offset=0"
+```
+
+**20. Get trending items with hot score for multiple sources:**
+
+```sh
+curl "http://localhost:8000/api/v1/items/trending?window=24h&use_hot_score=true&limit=50"
+```
+
+All endpoints support JSON responses and include appropriate HTTP caching headers for optimal performance.
 
 ## Running Tests
 

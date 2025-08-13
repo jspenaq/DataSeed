@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import CursorPage
+
 
 class ContentItemBase(BaseModel):
     """Base schema for ContentItem with common fields."""
@@ -49,3 +51,25 @@ class PaginatedContentItems(BaseModel):
     limit: int = Field(description="Number of items per page")
     offset: int = Field(description="Offset from the start")
     items: list[ContentItemResponse] = Field(description="List of content items")
+
+
+class ContentItemCursorPage(CursorPage[ContentItemResponse]):
+    """Schema for cursor-based paginated ContentItem responses."""
+    pass
+
+
+class SourceStat(BaseModel):
+    """Schema for source statistics."""
+    
+    source_name: str = Field(description="Name of the data source")
+    item_count: int = Field(description="Number of items from this source")
+
+
+class ItemsStats(BaseModel):
+    """Schema for items statistics response."""
+    
+    total_items: int = Field(description="Total number of items")
+    new_last_window: int = Field(description="Number of items created within the specified window")
+    top_sources: list[SourceStat] = Field(description="Top sources by item count")
+    max_score: float | None = Field(default=None, description="Maximum score among items")
+    avg_score: float | None = Field(default=None, description="Average score among items")
