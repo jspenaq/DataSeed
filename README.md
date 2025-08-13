@@ -57,6 +57,40 @@ These instructions will get you a copy of the project up and running on your loc
 -   **API**: The API will be available at `http://localhost:8000`. You can access the auto-generated documentation at `http://localhost:8000/docs`.
 -   **Dashboard**: The Streamlit dashboard will be available at `http://localhost:8501`.
 
+### API Usage
+
+Here are a few examples of how to query the API using `curl`:
+
+**1. Get the latest items from all sources:**
+
+```sh
+curl http://localhost:8000/api/v1/items/
+```
+
+**2. Get the latest items from a specific source (e.g., HackerNews):**
+
+```sh
+curl http://localhost:8000/api/v1/items/?source_name=hackernews
+```
+
+**3. Search for items with a query (e.g., "AI"):**
+
+```sh
+curl http://localhost:8000/api/v1/items/?q=AI
+```
+
+**4. Paginate results (get 5 items, skipping the first 10):**
+
+```sh
+curl http://localhost:8000/api/v1/items/?limit=5&offset=10
+```
+
+**5. Combine filters (search for "Python" in "github" source):**
+
+```sh
+curl http://localhost:8000/api/v1/items/?source_name=github&q=Python
+```
+
 ## Running Tests
 
 To run the tests, you can execute the following command:
