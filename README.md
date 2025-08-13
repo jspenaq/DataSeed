@@ -2,6 +2,15 @@
 
 DataSeed is a developer-friendly data pipeline that periodically ingests content from HackerNews, Reddit, GitHub, and ProductHunt, normalizes and deduplicates it into a PostgreSQL database, exposes a read-only FastAPI REST API, and ships a Streamlit mini-dashboard with analytics.
 
+## Features
+
+- **Multi-Source ETL Pipeline**: Automated extraction from public APIs (HackerNews, Reddit, GitHub, ProductHunt).
+- **Data Normalization**: Pydantic-based validation, deduplication, and cleaning for consistent data quality.
+- **Public API**: RESTful read-only API with filtering, search, and sorting capabilities.
+- **Mini Dashboard**: Streamlit-based interface for data exploration and visualization.
+- **Scheduled Updates**: Automated data refresh with retry/backoff mechanisms for reliability.
+- **Monitoring**: Simple counters and health checks for pipeline status.
+
 ## Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
@@ -16,7 +25,7 @@ These instructions will get you a copy of the project up and running on your loc
 1.  **Clone the repository:**
 
     ```sh
-    git clone https://github.com/your-username/DataSeed.git
+    git clone https://github.com/jspenaq/DataSeed.git
     cd DataSeed
     ```
 
@@ -56,25 +65,31 @@ To run the tests, you can execute the following command:
 docker-compose run --rm api pytest
 ```
 
-    ```sh
-    docker-compose up --build
-    ```
+## Project Structure
 
-    This will start the following services:
-    -   `db`: PostgreSQL database
-    -   `redis`: Redis server for Celery
-    -   `api`: FastAPI application
-    -   `worker`: Celery worker for data ingestion
-    -   `dashboard`: Streamlit dashboard
+```
+DataSeed/
+├── app/                     # Core application logic (FastAPI, models, services, workers)
+├── dashboard/               # Streamlit dashboard application
+├── migrations/              # Alembic database migrations
+├── config/                  # Configuration files (e.g., source definitions)
+├── tests/                   # Unit, integration, and API tests
+├── docker/                  # Docker-related files (Dockerfile, docker-compose.yml)
+└── scripts/                 # Utility scripts
+```
 
-## Usage
+## Contributing
 
--   **API**: The API will be available at `http://localhost:8000`. You can access the auto-generated documentation at `http://localhost:8000/docs`.
--   **Dashboard**: The Streamlit dashboard will be available at `http://localhost:8501`.
+Contributions are welcome! Please follow these steps:
 
-## Running Tests
+1.  Fork the repository.
+2.  Create a new branch (`git checkout -b feature/your-feature-name`).
+3.  Make your changes.
+4.  Ensure your code adheres to the project's coding style and passes all tests.
+5.  Commit your changes (`git commit -m 'feat: Add new feature'`).
+6.  Push to the branch (`git push origin feature/your-feature-name`).
+7.  Open a pull request.
 
-To run the tests, you can execute the following command:
+## License
 
-```sh
-docker-compose run --rm api pytest
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
