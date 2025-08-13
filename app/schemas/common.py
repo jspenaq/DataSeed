@@ -1,7 +1,10 @@
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from app.schemas.items import ContentItemResponse
 
 
 class HealthCheckResult(BaseModel):
@@ -28,3 +31,5 @@ class PaginatedResponse(BaseModel):
     limit: int = Field(description="Number of items per page")
     offset: int = Field(description="Offset from the start")
     items: list[Any] = Field(description="List of items")
+
+
