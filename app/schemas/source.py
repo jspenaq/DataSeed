@@ -110,3 +110,13 @@ class SourceDetailResponse(BaseModel):
     source: SourceWithStats
     ingestion_runs: list[IngestionRunSummary]
     lag_trend: list[dict[str, Any]] = Field(description="Ingestion lag trend data for sparkline")
+
+
+class SourceInfo(BaseModel):
+    """Minimal source info for nesting in item responses."""
+
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True

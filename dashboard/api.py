@@ -256,12 +256,12 @@ class DataSeedAPIClient:
         if search:
             params["search"] = search
 
-        return await self._make_request("GET", "/api/v1/sources", params=params)
+        return await self._make_request("GET", "/api/v1/sources/", params=params)
 
     async def get_source_details(self, source_id: int, runs_limit: int = 10) -> dict[str, Any]:
         """Get detailed information for a specific source."""
         params = {"runs_limit": runs_limit}
-        return await self._make_request("GET", f"/api/v1/sources/{source_id}", params=params)
+        return await self._make_request("GET", f"/api/v1/sources/{source_id}/", params=params)
 
     async def get_items(
         self,

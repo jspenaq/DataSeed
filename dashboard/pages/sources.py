@@ -6,7 +6,7 @@ Provides monitoring and management capabilities for all connected data sources.
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Dict, Any, List, Optional
 
 import pandas as pd
 import streamlit as st
@@ -176,10 +176,11 @@ def render_source_card(source: dict[str, Any]):
             else:
                 st.caption("No successful runs")
 
-            # Last run status
-            last_status = stats.get("last_run_status", "unknown")
+            # Last run status (CORRECTED)
+            last_status = stats.get("last_run_status")
             status_emoji = {"completed": "✅", "failed": "❌", "running": "🔄"}.get(last_status, "❓")
-            st.caption(f"Status: {status_emoji} {last_status.title()}")
+            status_text = last_status.title() if last_status else "Not Run Yet"
+            st.caption(f"Status: {status_emoji} {status_text}")
 
             # Quick stats
             items_24h = stats.get("items_last_24h", 0)
@@ -215,10 +216,11 @@ def render_source_card(source: dict[str, Any]):
                 else:
                     st.caption("No successful runs")
 
-                # Last run status
-                last_status = stats.get("last_run_status", "unknown")
+                # Last run status (CORRECTED)
+                last_status = stats.get("last_run_status")
                 status_emoji = {"completed": "✅", "failed": "❌", "running": "🔄"}.get(last_status, "❓")
-                st.caption(f"Status: {status_emoji} {last_status.title()}")
+                status_text = last_status.title() if last_status else "Not Run Yet"
+                st.caption(f"Status: {status_emoji} {status_text}")
 
             with col3:
                 # Quick stats
