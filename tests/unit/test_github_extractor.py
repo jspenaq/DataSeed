@@ -86,7 +86,7 @@ class TestGitHubExtractor:
                     "pushed_at": "2023-12-01T11:00:00Z",
                     "updated_at": "2023-12-01T11:00:00Z",
                 },
-            ]
+            ],
         }
 
     @pytest.fixture
@@ -171,7 +171,11 @@ class TestGitHubExtractor:
         assert key1 != key2  # Different URLs should have different keys
 
     async def test_fetch_recent_search_mode_success(
-        self, search_config, mock_http_client, sample_repository_data, mock_normalizer
+        self,
+        search_config,
+        mock_http_client,
+        sample_repository_data,
+        mock_normalizer,
     ):
         """Test successful fetch_recent in search mode."""
         # Mock HTTP response
@@ -231,7 +235,11 @@ class TestGitHubExtractor:
         assert headers["If-None-Match"] == b"cached-etag"
 
     async def test_fetch_recent_releases_mode_success(
-        self, releases_config, mock_http_client, sample_release_data, mock_normalizer
+        self,
+        releases_config,
+        mock_http_client,
+        sample_release_data,
+        mock_normalizer,
     ):
         """Test successful fetch_recent in releases mode."""
         # Mock HTTP responses for each repository
@@ -285,7 +293,10 @@ class TestGitHubExtractor:
         assert mock_http_client.get_with_response.call_count == 2
 
     async def test_fetch_recent_releases_mode_with_since_filter(
-        self, releases_config, mock_http_client, mock_normalizer
+        self,
+        releases_config,
+        mock_http_client,
+        mock_normalizer,
     ):
         """Test fetch_recent in releases mode with since date filtering."""
         # Create release data with different dates
@@ -392,7 +403,11 @@ class TestGitHubExtractor:
         assert result == []
 
     async def test_fetch_recent_redis_error(
-        self, search_config, mock_http_client, sample_repository_data, mock_normalizer
+        self,
+        search_config,
+        mock_http_client,
+        sample_repository_data,
+        mock_normalizer,
     ):
         """Test fetch_recent handles Redis errors gracefully."""
         # Mock HTTP response
@@ -493,7 +508,9 @@ class TestGitHubExtractor:
     async def test_unknown_mode(self, mock_http_client):
         """Test extractor with unknown mode."""
         config = ExtractorConfig(
-            base_url="https://api.github.com", rate_limit=5000, config={"token": "test_token", "mode": "unknown_mode"}
+            base_url="https://api.github.com",
+            rate_limit=5000,
+            config={"token": "test_token", "mode": "unknown_mode"},
         )
 
         extractor = GitHubExtractor(config, http_client=mock_http_client)

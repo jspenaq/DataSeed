@@ -57,6 +57,111 @@ These instructions will get you a copy of the project up and running on your loc
 -   **API**: The API will be available at `http://localhost:8000`. You can access the auto-generated documentation at `http://localhost:8000/docs`.
 -   **Dashboard**: The Streamlit dashboard will be available at `http://localhost:8501`.
 
+### Dashboard
+
+The DataSeed Dashboard is a comprehensive Streamlit-based web interface that provides real-time insights and analytics for your data pipeline. It offers an intuitive way to explore content from all connected sources, monitor system health, and analyze trends.
+
+#### Features
+
+- **📊 Overview Page**: Real-time KPIs, system health monitoring, trending items, and latest content with search and filtering
+- **🔗 Sources Page**: Data source management, ingestion statistics, health monitoring, and detailed run history
+- **📈 Analytics Page**: Interactive charts, trend analysis, data export capabilities, and comprehensive filtering options
+- **🔄 Auto-Refresh**: Configurable automatic data updates with rate limiting awareness
+- **📱 Mobile Responsive**: Optimized interface that works seamlessly on desktop, tablet, and mobile devices
+- **📤 Data Export**: CSV, JSON, and Excel export functionality for all data tables
+- **🎯 Advanced Filtering**: Search, source filtering, time windows, and custom queries
+
+#### Running the Dashboard
+
+To run the dashboard locally:
+
+```sh
+# Using Docker Compose (recommended)
+docker-compose up dashboard
+
+# Or run directly with Streamlit
+streamlit run dashboard/main.py
+```
+
+The dashboard will be available at `http://localhost:8501`.
+
+#### Environment Variables
+
+The dashboard requires the following environment variables:
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `API_BASE_URL` | Base URL for the DataSeed API | `http://localhost:8000` | No |
+| `DASHBOARD_TITLE` | Custom title for the dashboard | `DataSeed Dashboard` | No |
+| `TELEMETRY_ENABLED` | Enable telemetry logging | `true` | No |
+| `TELEMETRY_LOG_FILE` | Path to telemetry log file | `dashboard_telemetry.log` | No |
+
+Example `.env` configuration:
+```env
+API_BASE_URL=http://localhost:8000
+DASHBOARD_TITLE=My DataSeed Dashboard
+TELEMETRY_ENABLED=true
+TELEMETRY_LOG_FILE=logs/dashboard_telemetry.log
+```
+
+#### Dashboard Pages
+
+**Overview Page**
+- System health indicators (API, Database, Redis)
+- Key performance indicators (total items, success rate, ingestion lag)
+- Trending items from the last 24 hours
+- Latest content with real-time search and filtering
+- Export functionality for search results
+
+**Sources Page**
+- Overview of all configured data sources
+- Health status monitoring for each source
+- Detailed ingestion statistics and run history
+- Performance metrics and error tracking
+- Source-specific filtering and analysis
+
+**Analytics Page**
+- Interactive time-series charts showing ingestion trends
+- Source comparison and distribution analysis
+- Score distribution histograms
+- Trending content analysis
+- Advanced filtering by time window, sources, and search queries
+- Comprehensive data export capabilities
+
+#### Auto-Refresh Feature
+
+The dashboard includes intelligent auto-refresh functionality:
+
+- **Configurable Intervals**: 15 seconds to 10 minutes
+- **Rate Limiting Awareness**: Automatically pauses when API rate limits are hit
+- **Manual Controls**: Pause, resume, and manual refresh options
+- **Visual Indicators**: Progress bars and countdown timers
+- **Mobile Optimized**: Touch-friendly controls on mobile devices
+
+#### Telemetry and Monitoring
+
+The dashboard includes built-in telemetry for monitoring user interactions and system performance:
+
+- **Page Views**: Track navigation patterns
+- **User Actions**: Monitor feature usage and interactions
+- **API Performance**: Track request durations and success rates
+- **Rate Limiting**: Monitor and alert on API rate limit events
+- **Export Activity**: Track data export usage patterns
+
+Telemetry data is logged to console and optionally to file for analysis.
+
+#### Mobile Responsiveness
+
+The dashboard is fully responsive and optimized for mobile devices:
+
+- **Adaptive Layouts**: Automatically adjusts to screen size
+- **Touch-Friendly Controls**: Optimized buttons and interactions
+- **Collapsible Sidebar**: Space-efficient navigation on mobile
+- **Readable Typography**: Optimized text sizes and spacing
+- **Fast Loading**: Optimized for mobile network conditions
+
+For detailed usage instructions and screenshots, see the [Dashboard Guide](docs/dashboard_guide.md).
+
 ### API Usage
 
 The DataSeed API provides several endpoints for accessing content items, statistics, and trending data. Here are comprehensive examples using `curl`:

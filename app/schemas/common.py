@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Any, Generic, List, Literal, Optional, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class HealthCheckResult(BaseModel):
@@ -36,5 +36,5 @@ class CursorPage(BaseModel, Generic[T]):
     """Generic schema for cursor-based paginated responses."""
 
     limit: int = Field(description="Number of items per page")
-    next_cursor: Optional[str] = Field(default=None, description="Cursor for the next page")
-    items: List[T] = Field(description="List of items")
+    next_cursor: str | None = Field(default=None, description="Cursor for the next page")
+    items: list[T] = Field(description="List of items")

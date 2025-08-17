@@ -120,6 +120,7 @@ async def _ingest_source_async(task_instance, source_identifier: str | int) -> d
 
             # 5) Normalize data using factory-created normalizer
             from app.schemas.items import ContentItemCreate
+
             if raw_items and isinstance(raw_items[0], ContentItemCreate):
                 normalized_items = raw_items
                 normalization_errors = 0
@@ -230,7 +231,7 @@ def schedule_all_sources_task(self) -> dict[str, Any]:
         return {"sources_found": 0, "tasks_scheduled": 0, "error": str(e)}
 
     logger.info(
-        f"Scheduled ingestion completed: {result['tasks_scheduled']} tasks for {result['sources_found']} sources"
+        f"Scheduled ingestion completed: {result['tasks_scheduled']} tasks for {result['sources_found']} sources",
     )
     return result
 

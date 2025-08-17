@@ -6,8 +6,7 @@ including trending repositories, releases, and other relevant project informatio
 """
 
 import hashlib
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
 
 import redis.asyncio as redis
 from loguru import logger
@@ -28,7 +27,10 @@ class GitHubExtractor(BaseExtractor):
     """
 
     def __init__(
-        self, config: ExtractorConfig, http_client: RateLimitedClient | None = None, source_id: int | None = None
+        self,
+        config: ExtractorConfig,
+        http_client: RateLimitedClient | None = None,
+        source_id: int | None = None,
     ):
         super().__init__(config)
         self.http_client = http_client or self.get_http_client()
@@ -64,7 +66,7 @@ class GitHubExtractor(BaseExtractor):
             {
                 "Accept": "application/vnd.github.v3+json",
                 "User-Agent": "DataSeed/1.0 (https://github.com/jspenaq/dataseed)",
-            }
+            },
         )
         if self.token:
             self.http_client.default_headers["Authorization"] = f"Bearer {self.token}"
@@ -106,11 +108,10 @@ class GitHubExtractor(BaseExtractor):
         """
         if self.mode == "search":
             return await self._fetch_search_mode(since, limit)
-        elif self.mode == "releases":
+        if self.mode == "releases":
             return await self._fetch_releases_mode(since, limit)
-        else:
-            logger.error(f"Unknown mode: {self.mode}")
-            return []
+        logger.error(f"Unknown mode: {self.mode}")
+        return []
 
     async def _fetch_search_mode(self, since: datetime | None = None, limit: int = 100) -> list[RawItem]:
         """
@@ -200,18 +201,16 @@ class GitHubExtractor(BaseExtractor):
                             normalized_items.append(normalized_item)
                         except Exception as e:
                             logger.warning(
-                                f"Failed to normalize repository {raw_item.get('full_name', 'unknown')}: {e}"
+                                f"Failed to normalize repository {raw_item.get('full_name', 'unknown')}: {e}",
                             )
                             continue
 
                     logger.info(f"Successfully normalized {len(normalized_items)} repositories")
                     return normalized_items
-                else:
-                    logger.warning("No normalizer available, returning raw items")
-                    return raw_items
-            else:
-                logger.error(f"Unexpected response format from GitHub API: {type(response_data)}")
-                return []
+                logger.warning("No normalizer available, returning raw items")
+                return raw_items
+            logger.error(f"Unexpected response format from GitHub API: {type(response_data)}")
+            return []
 
         except Exception as e:
             logger.error(f"Error fetching GitHub repositories: {e}")
@@ -297,12 +296,12 @@ class GitHubExtractor(BaseExtractor):
                         published_at_str = release.get("published_at")
                         if published_at_str:
                             try:
-                                from datetime import datetime, timezone
+                                from datetime import datetime
 
                                 published_at = datetime.fromisoformat(published_at_str.replace("Z", "+00:00"))
                                 # Ensure both datetimes are timezone-aware for comparison
                                 if since.tzinfo is None:
-                                    since = since.replace(tzinfo=timezone.utc)
+                                    since = since.replace(tzinfo=UTC)
                                 if published_at <= since:
                                     continue  # Skip releases older than since date
                             except ValueError:
@@ -335,9 +334,8 @@ class GitHubExtractor(BaseExtractor):
 
             logger.info(f"Successfully normalized {len(normalized_releases)} releases")
             return normalized_releases[:limit]  # Respect the limit parameter
-        else:
-            logger.warning("No normalizer available, returning raw releases")
-            return all_releases[:limit]
+        logger.warning("No normalizer available, returning raw releases")
+        return all_releases[:limit]
 
     async def fetch_batch(self, limit: int = 100) -> list[RawItem]:
         """

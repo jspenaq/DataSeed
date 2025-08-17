@@ -5,7 +5,6 @@ Tests the complete end-to-end flow: ingest_source_task -> IngestionService ->
 GitHubExtractor -> GitHubNormalizer -> Database persistence.
 """
 
-import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -465,7 +464,7 @@ class TestGitHubIngestionIntegration:
                     "id": 789012,
                     # Missing full_name, html_url, etc.
                 },
-            ]
+            ],
         }
 
         mock_response = AsyncMock(spec=Response)
@@ -611,7 +610,7 @@ class TestGitHubIngestionIntegration:
                 "html_url": "https://github.com/facebook/react/releases/tag/v1.0.0",
                 "body": "Old release",
                 "published_at": "2023-11-01T12:00:00Z",  # Old date
-            }
+            },
         ]
 
         new_releases = [
@@ -622,7 +621,7 @@ class TestGitHubIngestionIntegration:
                 "html_url": "https://github.com/facebook/react/releases/tag/v2.0.0",
                 "body": "New release",
                 "published_at": "2023-12-01T12:00:00Z",  # Recent date
-            }
+            },
         ]
 
         # Mock responses to return different data for different calls

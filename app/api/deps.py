@@ -17,17 +17,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def rate_limiter_dependency(
-    request: Request,
-    response: Response,
-    redis_client = Depends(get_redis_client)
-) -> None:
+async def rate_limiter_dependency(request: Request, response: Response, redis_client=Depends(get_redis_client)) -> None:
     """
     FastAPI dependency for rate limiting using token-bucket algorithm.
-    
+
     Rate limits are applied per API key (if provided) or per IP address.
     Default limits: 120 requests capacity, 2 tokens/second refill rate.
-    
+
     Raises:
         HTTPException: 429 Too Many Requests if rate limit exceeded
     """
@@ -39,27 +35,24 @@ async def rate_limiter_dependency(
         # Fall back to IP address
         client_ip = request.client.host if request.client else "unknown"
         identifier = f"ip:{client_ip}"
-    
+
     # Initialize rate limiter with capacity=120, refill_rate=2 tokens/sec
-    rate_limiter = RateLimiter(
-        capacity=120,
-        refill_rate=2.0,
-        redis_client=redis_client
-    )
-    
+    rate_limiter = RateLimiter(capacity=120, refill_rate=2.0, redis_client=redis_client)
+
     # Check if request is allowed
     is_allowed, remaining_tokens, reset_time = await rate_limiter.is_allowed(identifier)
-    
+
     # Set rate limit headers
     response.headers["X-RateLimit-Limit"] = "120"
     response.headers["X-RateLimit-Remaining"] = str(remaining_tokens)
     response.headers["X-RateLimit-Reset"] = str(int(reset_time))
-    
+
     if not is_allowed:
         # Calculate retry-after in seconds
         import time
+
         retry_after = max(1, int(reset_time - time.time()))
-        
+
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Too many requests.",
@@ -67,6 +60,6 @@ async def rate_limiter_dependency(
                 "Retry-After": str(retry_after),
                 "X-RateLimit-Limit": "120",
                 "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(int(reset_time))
-            }
+                "X-RateLimit-Reset": str(int(reset_time)),
+            },
         )

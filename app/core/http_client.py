@@ -70,7 +70,10 @@ class RateLimitedClient:
         return self.client
 
     async def get_json(
-        self, url: str, retries: int | None = None, headers: dict[str, str] | None = None
+        self,
+        url: str,
+        retries: int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any] | list[Any] | None:
         """
         Make HTTP GET request and return JSON response with retry logic and rate limiting.
@@ -98,7 +101,10 @@ class RateLimitedClient:
             return None
 
     async def get_with_response(
-        self, url: str, retries: int | None = None, headers: dict[str, str] | None = None
+        self,
+        url: str,
+        retries: int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> httpx.Response | None:
         """
         Make HTTP GET request and return full response with retry logic and rate limiting.

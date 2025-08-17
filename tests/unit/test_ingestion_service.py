@@ -19,8 +19,6 @@ from app.schemas.items import ContentItemCreate
 pytestmark = pytest.mark.asyncio
 
 
-
-
 class TestIngestionService:
     """Test suite for IngestionService class."""
 

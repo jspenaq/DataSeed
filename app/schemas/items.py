@@ -55,19 +55,20 @@ class PaginatedContentItems(BaseModel):
 
 class ContentItemCursorPage(CursorPage[ContentItemResponse]):
     """Schema for cursor-based paginated ContentItem responses."""
+
     pass
 
 
 class SourceStat(BaseModel):
     """Schema for source statistics."""
-    
+
     source_name: str = Field(description="Name of the data source")
     item_count: int = Field(description="Number of items from this source")
 
 
 class ItemsStats(BaseModel):
     """Schema for items statistics response."""
-    
+
     total_items: int = Field(description="Total number of items")
     new_last_window: int = Field(description="Number of items created within the specified window")
     top_sources: list[SourceStat] = Field(description="Top sources by item count")

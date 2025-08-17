@@ -7,8 +7,8 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 
-from app.core.extractors.github import GitHubExtractor
 from app.core.extractors.base import ExtractorConfig
+from app.core.extractors.github import GitHubExtractor
 from app.core.redis import RedisClient
 
 

@@ -75,6 +75,8 @@ services:
       - db
     environment:
       - DATABASE_URL=postgresql+asyncpg://DataSeed:dev_password@db/DataSeed_DB
+      - PYTHONPATH=/app
+      - API_BASE_URL=http://api:8000
     volumes:
     - ../dashboard:/app/dashboard
     - ../config:/app/config

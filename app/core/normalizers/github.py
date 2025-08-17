@@ -45,8 +45,7 @@ class GitHubNormalizer(BaseNormalizer):
             # Determine item type based on presence of repository_full_name field
             if "repository_full_name" in raw_item:
                 return self._normalize_release(raw_item)
-            else:
-                return self._normalize_repository(raw_item)
+            return self._normalize_repository(raw_item)
 
         except KeyError as e:
             raise NormalizationError(f"Missing required field: {e}", self._get_item_id(raw_item), e)
@@ -200,6 +199,5 @@ class GitHubNormalizer(BaseNormalizer):
             repo_name = raw_item.get("repository_full_name", "unknown")
             release_id = raw_item.get("id", "unknown")
             return f"{repo_name}#release:{release_id}"
-        else:
-            # Repository item
-            return str(raw_item.get("id", "unknown"))
+        # Repository item
+        return str(raw_item.get("id", "unknown"))
