@@ -36,7 +36,9 @@ async def get_items(
         examples=["artificial intelligence"],
     ),
     limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", examples=[20]),
-    offset: int = Query(0, ge=0, description="Number of items to skip from the beginning (for pagination)", examples=[0]),
+    offset: int = Query(
+        0, ge=0, description="Number of items to skip from the beginning (for pagination)", examples=[0],
+    ),
     db: AsyncSession = Depends(get_db),
     cache_info: CacheInfo = Depends(cache_dependency),
 ) -> PaginatedContentItems:

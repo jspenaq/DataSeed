@@ -286,12 +286,12 @@ class TestGitHubIngestionIntegration:
         # Verify items were created in database
         result = await db_session.execute(count_stmt)
         final_count = result.scalar()
-        
+
         # Debug: Check what items were actually created
         items_stmt = select(ContentItem).order_by(ContentItem.external_id)
         result = await db_session.execute(items_stmt)
         items = result.scalars().all()
-        
+
         # The test currently only creates 2 items due to the batch upsert issue
         # This is a known issue where the facebook/react releases are being overwritten
         # by the microsoft/vscode releases. For now, we'll adjust the test to match
@@ -367,9 +367,9 @@ class TestGitHubIngestionIntegration:
         updated_item = result.scalar_one()
 
         # Debug: Check what the actual values are
-        print(f"Expected content: 'An awesome test project for integration testing'")
+        print("Expected content: 'An awesome test project for integration testing'")
         print(f"Actual content: '{updated_item.content}'")
-        print(f"Expected score: 1250")
+        print("Expected score: 1250")
         print(f"Actual score: {updated_item.score}")
 
         # The upsert should update the content and score from the new data
@@ -717,14 +717,14 @@ class TestGitHubIngestionIntegration:
         items = result.scalars().all()
 
         assert len(items) == 2
-        
+
         # Check that we have one new release from each repository
         react_items = [item for item in items if "React New Release" in item.title]
         vscode_items = [item for item in items if "VSCode New Release" in item.title]
-        
+
         assert len(react_items) == 1
         assert len(vscode_items) == 1
-        
+
         # Verify the external IDs are correct
         for item in items:
             assert "#release:" in item.external_id

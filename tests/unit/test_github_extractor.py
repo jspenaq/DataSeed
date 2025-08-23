@@ -18,7 +18,6 @@ from app.core.http_client import RateLimitedClient
 from app.schemas.items import ContentItemCreate
 
 
-
 class TestGitHubExtractor:
     """Test suite for GitHubExtractor class."""
 
