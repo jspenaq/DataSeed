@@ -27,7 +27,7 @@ class ContentItemResponse(ContentItemBase):
     """Schema for ContentItem API responses."""
 
     id: int = Field(description="Internal database ID")
-    # source_id: int = Field(description="Reference to the data source")
+    source_id: int = Field(description="Reference to the data source")
     source: SourceInfo = Field(description="The source of the content item")
     created_at: datetime = Field(description="When the item was created in our system")
     updated_at: datetime = Field(description="When the item was last updated in our system")

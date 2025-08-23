@@ -28,15 +28,15 @@ async def get_items(
     source_name: str | None = Query(
         None,
         description="Filter by source name (e.g., 'hackernews', 'reddit', 'github', 'producthunt')",
-        example="hackernews",
+        examples=["hackernews"],
     ),
     q: str | None = Query(
         None,
         description="Search query that matches against both item titles and content using case-insensitive partial matching",
-        example="artificial intelligence",
+        examples=["artificial intelligence"],
     ),
-    limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", example=20),
-    offset: int = Query(0, ge=0, description="Number of items to skip from the beginning (for pagination)", example=0),
+    limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", examples=[20]),
+    offset: int = Query(0, ge=0, description="Number of items to skip from the beginning (for pagination)", examples=[0]),
     db: AsyncSession = Depends(get_db),
     cache_info: CacheInfo = Depends(cache_dependency),
 ) -> PaginatedContentItems:
@@ -117,19 +117,19 @@ async def get_items_cursor(
     source_name: str | None = Query(
         None,
         description="Filter by source name (e.g., 'hackernews', 'reddit', 'github', 'producthunt')",
-        example="hackernews",
+        examples=["hackernews"],
     ),
     q: str | None = Query(
         None,
         description="Search query that matches against both item titles and content using case-insensitive partial matching",
-        example="machine learning",
+        examples=["machine learning"],
     ),
     cursor: str | None = Query(
         None,
         description="Base64-encoded cursor for pagination. Use the 'next_cursor' from previous response to get the next page",
-        example="MjAyNC0wMS0xNVQxMDozMDowMFo6MTIzNDU=",
+        examples=["MjAyNC0wMS0xNVQxMDozMDowMFo6MTIzNDU="],
     ),
-    limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", example=20),
+    limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", examples=[20]),
     db: AsyncSession = Depends(get_db),
     cache_info: CacheInfo = Depends(cache_dependency),
 ) -> ContentItemCursorPage:
@@ -235,12 +235,12 @@ async def get_items_stats(
     window: str = Query(
         "24h",
         description="Time window for counting new items. Format: number + unit (h=hours, d=days, w=weeks)",
-        example="24h",
+        examples=["24h"],
     ),
     source_name: str | None = Query(
         None,
         description="Filter statistics by specific source name",
-        example="hackernews",
+        examples=["hackernews"],
     ),
     db: AsyncSession = Depends(get_db),
     cache_info: CacheInfo = Depends(cache_dependency),
@@ -341,18 +341,18 @@ async def get_trending_items(
     window: str = Query(
         "24h",
         description="Time window for trending analysis. Format: number + unit (h=hours, d=days, w=weeks)",
-        example="24h",
+        examples=["24h"],
     ),
     source_name: str | None = Query(
         None,
         description="Filter trending items by specific source name",
-        example="hackernews",
+        examples=["hackernews"],
     ),
-    limit: int = Query(20, ge=1, le=100, description="Maximum number of trending items to return", example=20),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of trending items to return", examples=[20]),
     use_hot_score: bool = Query(
         False,
         description="Enable advanced hot score algorithm that balances item score with recency (PostgreSQL only, falls back to simple scoring on other databases)",
-        example=False,
+        examples=[False],
     ),
     db: AsyncSession = Depends(get_db),
     cache_info: CacheInfo = Depends(cache_dependency),

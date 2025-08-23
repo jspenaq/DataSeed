@@ -7,6 +7,7 @@ Provides database fixtures, async session management, and test utilities.
 import asyncio
 import os
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -71,6 +72,8 @@ def setup_test_environment():
     """Set up test environment variables."""
     os.environ["TESTING"] = "true"
     os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+    # Set a dummy Redis URL to avoid Redis connection issues in tests
+    os.environ["CELERY_BROKER_URL"] = "redis://localhost:6379/0"
     yield
     # Cleanup
     if "TESTING" in os.environ:
@@ -81,3 +84,34 @@ def setup_test_environment():
 def test_settings():
     """Get test settings."""
     return settings
+
+
+@pytest.fixture
+def mock_redis_client():
+    """Create a mock Redis client for testing."""
+    mock_client = MagicMock()
+    
+    # Mock pipeline behavior - pipeline methods are synchronous
+    mock_pipeline = MagicMock()
+    mock_pipeline.get.return_value = mock_pipeline
+    mock_pipeline.set.return_value = mock_pipeline
+    mock_pipeline.execute = AsyncMock(return_value=[None, None])  # Default: no existing tokens
+    mock_client.pipeline.return_value = mock_pipeline
+    
+    return mock_client
+
+
+@pytest.fixture(autouse=True)
+def mock_redis_dependency(mock_redis_client):
+    """Mock the Redis dependency for all tests."""
+    from app.core.redis import get_redis_client
+    from app.main import app
+    
+    def override_get_redis_client():
+        yield mock_redis_client
+    
+    app.dependency_overrides[get_redis_client] = override_get_redis_client
+    yield
+    # Clean up dependency override
+    if get_redis_client in app.dependency_overrides:
+        del app.dependency_overrides[get_redis_client]

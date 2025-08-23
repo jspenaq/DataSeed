@@ -17,7 +17,6 @@ from app.core.extractors.github import GitHubExtractor
 from app.core.http_client import RateLimitedClient
 from app.schemas.items import ContentItemCreate
 
-pytestmark = pytest.mark.asyncio
 
 
 class TestGitHubExtractor:
@@ -170,6 +169,7 @@ class TestGitHubExtractor:
         assert key2.startswith("github:etag:")
         assert key1 != key2  # Different URLs should have different keys
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_search_mode_success(
         self,
         search_config,
@@ -210,6 +210,7 @@ class TestGitHubExtractor:
         # Verify normalizer was called for each item
         assert mock_normalizer.normalize.call_count == 2
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_search_mode_304_not_modified(self, search_config, mock_http_client):
         """Test fetch_recent in search mode with 304 Not Modified response."""
         # Mock HTTP response with 304 status
@@ -234,6 +235,7 @@ class TestGitHubExtractor:
         headers = call_args[1]["headers"]
         assert headers["If-None-Match"] == b"cached-etag"
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_releases_mode_success(
         self,
         releases_config,
@@ -270,6 +272,7 @@ class TestGitHubExtractor:
         # Verify normalizer was called for each release
         assert mock_normalizer.normalize.call_count == 4
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_releases_mode_304_not_modified(self, releases_config, mock_http_client):
         """Test fetch_recent in releases mode with 304 Not Modified response."""
         # Mock HTTP response with 304 status
@@ -292,6 +295,7 @@ class TestGitHubExtractor:
         # Should have called each repository
         assert mock_http_client.get_with_response.call_count == 2
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_releases_mode_with_since_filter(
         self,
         releases_config,
@@ -341,6 +345,7 @@ class TestGitHubExtractor:
         # Verify normalizer was called only for new releases
         assert mock_normalizer.normalize.call_count == 2
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_http_error(self, search_config, mock_http_client):
         """Test fetch_recent handles HTTP errors gracefully."""
         # Mock HTTP client to return None (error case)
@@ -357,6 +362,7 @@ class TestGitHubExtractor:
         # Should return empty list on HTTP error
         assert result == []
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_json_parse_error(self, search_config, mock_http_client):
         """Test fetch_recent handles JSON parsing errors."""
         # Mock HTTP response with invalid JSON
@@ -377,6 +383,7 @@ class TestGitHubExtractor:
         # Should return empty list on JSON error
         assert result == []
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_normalization_error(self, search_config, mock_http_client, sample_repository_data):
         """Test fetch_recent handles normalization errors gracefully."""
         # Mock HTTP response
@@ -402,6 +409,7 @@ class TestGitHubExtractor:
         # Should return empty list when all normalizations fail
         assert result == []
 
+    @pytest.mark.asyncio
     async def test_fetch_recent_redis_error(
         self,
         search_config,
@@ -431,6 +439,7 @@ class TestGitHubExtractor:
         # Should still work despite Redis errors
         assert len(result) == 2
 
+    @pytest.mark.asyncio
     async def test_fetch_batch(self, search_config, mock_http_client, sample_repository_data, mock_normalizer):
         """Test fetch_batch method."""
         # Mock HTTP response
@@ -456,6 +465,7 @@ class TestGitHubExtractor:
         call_args = mock_http_client.get_with_response.call_args
         assert "per_page=25" in call_args[0][0]
 
+    @pytest.mark.asyncio
     async def test_health_check_success(self, search_config, mock_http_client):
         """Test successful health check."""
         # Mock successful rate limit response
@@ -470,6 +480,7 @@ class TestGitHubExtractor:
             headers={"Accept": "application/vnd.github.v3+json", "Authorization": "Bearer test_token"},
         )
 
+    @pytest.mark.asyncio
     async def test_health_check_failure(self, search_config, mock_http_client):
         """Test health check failure."""
         # Mock failed response
@@ -480,6 +491,7 @@ class TestGitHubExtractor:
 
         assert result is False
 
+    @pytest.mark.asyncio
     async def test_health_check_exception(self, search_config, mock_http_client):
         """Test health check handles exceptions."""
         # Mock exception
@@ -490,6 +502,7 @@ class TestGitHubExtractor:
 
         assert result is False
 
+    @pytest.mark.asyncio
     async def test_close(self, search_config, mock_http_client):
         """Test close method."""
         extractor = GitHubExtractor(search_config, http_client=mock_http_client)
@@ -497,6 +510,7 @@ class TestGitHubExtractor:
 
         mock_http_client.close.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_async_context_manager(self, search_config, mock_http_client):
         """Test async context manager functionality."""
         async with GitHubExtractor(search_config, http_client=mock_http_client) as extractor:
@@ -505,6 +519,7 @@ class TestGitHubExtractor:
         # Should have called close
         mock_http_client.close.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_unknown_mode(self, mock_http_client):
         """Test extractor with unknown mode."""
         config = ExtractorConfig(
