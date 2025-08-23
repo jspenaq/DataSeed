@@ -30,10 +30,10 @@ class GitHubExtractor(BaseExtractor):
     def __init__(
         self,
         config: ExtractorConfig,
+        source_id: int,
         http_client: RateLimitedClient | None = None,
-        source_id: int | None = None,
     ) -> None:
-        super().__init__(config)
+        super().__init__(config, source_id)
         self.http_client = http_client or self.get_http_client()
         # Get GitHub token from configuration
         self.token = self.extractor_config.get("token")
@@ -51,13 +51,10 @@ class GitHubExtractor(BaseExtractor):
         else:
             self.repositories = None
 
-        # Initialize normalizer if source_id is provided
-        if source_id is not None:
-            from app.core.registry import get_normalizer
+        # Initialize normalizer
+        from app.core.registry import get_normalizer
 
-            self.normalizer = get_normalizer("github", source_id)
-        else:
-            self.normalizer = None
+        self.normalizer = get_normalizer("github", source_id)
 
         # Initialize Redis client for ETag caching
         self.redis: redis.Redis | None = None

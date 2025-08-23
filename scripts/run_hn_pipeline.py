@@ -52,7 +52,7 @@ async def run_hackernews_pipeline(db: AsyncSession):
 
     # Step 2: Initialize components
     extractor_config = ExtractorConfig(base_url=source.base_url, rate_limit=source.rate_limit, config=source.config)
-    extractor = HackerNewsExtractor(extractor_config)
+    extractor = HackerNewsExtractor(extractor_config, source.id)
     normalizer = get_normalizer(source.name, source.id)
     ingestion_service = IngestionService(db)
 

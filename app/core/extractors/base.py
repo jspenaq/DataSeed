@@ -31,8 +31,9 @@ class ExtractorConfig(BaseModel):
 class BaseExtractor(ABC):
     """Abstract base class for all data extractors."""
 
-    def __init__(self, config: ExtractorConfig) -> None:
+    def __init__(self, config: ExtractorConfig, source_id: int) -> None:
         self.config = config
+        self.source_id = source_id
         self.base_url = config.base_url
         self.rate_limit = config.rate_limit
         self.extractor_config = config.config

@@ -122,6 +122,7 @@ async def _ingest_source_async(task_instance, source_identifier: str | int) -> d
             from app.schemas.items import ContentItemCreate
 
             if raw_items and isinstance(raw_items[0], ContentItemCreate):
+                # This case should ideally not happen if extractors always return RawItem
                 normalized_items = raw_items
                 normalization_errors = 0
                 logger.info("Items are already normalized, skipping normalization step")
@@ -135,13 +136,16 @@ async def _ingest_source_async(task_instance, source_identifier: str | int) -> d
                         normalized_item = normalizer.normalize(raw_item)
                         normalized_items.append(normalized_item)
                     except Exception as e:
-                        logger.warning(f"Failed to normalize item {raw_item.get('id', 'unknown')}: {e}")
+                        item_id = getattr(raw_item, "external_id", "unknown")
+                        logger.warning(f"Failed to normalize item {item_id}: {e}")
                         normalization_errors += 1
                 logger.info(f"Normalized {len(normalized_items)} items ({normalization_errors} errors)")
 
             # 6) Upsert to database using service instantiated within task
             ingestion_service = IngestionService(session)
-            upsert_stats = await ingestion_service.batch_upsert_items(normalized_items)
+            upsert_stats = await ingestion_service.batch_upsert_items(
+                [item for item in normalized_items if isinstance(item, ContentItemCreate)],
+            )
 
             # 7) Complete ingestion run
             await _finish_run(

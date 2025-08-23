@@ -13,8 +13,8 @@ from app.core.registry import register_extractor
 class HackerNewsExtractor(BaseExtractor):
     """HackerNews API extractor using httpx for async operations."""
 
-    def __init__(self, config: ExtractorConfig, http_client: RateLimitedClient | None = None) -> None:
-        super().__init__(config)
+    def __init__(self, config: ExtractorConfig, source_id: int, http_client: RateLimitedClient | None = None) -> None:
+        super().__init__(config, source_id)
         self.http_client = http_client or self.get_http_client()
         # Add user agent to the client if not provided
         if http_client is None:
