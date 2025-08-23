@@ -45,4 +45,4 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
         return published_at, item_id
 
     except (binascii.Error, json.JSONDecodeError, KeyError, ValueError) as e:
-        raise ValueError(f"Invalid cursor format: {e}")
+        raise ValueError(f"Invalid cursor format: {e}") from e

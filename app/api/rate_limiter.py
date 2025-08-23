@@ -11,7 +11,7 @@ class RateLimiter:
     while maintaining a steady refill rate over time.
     """
 
-    def __init__(self, capacity: int, refill_rate: float, redis_client: redis.Redis):
+    def __init__(self, capacity: int, refill_rate: float, redis_client: redis.Redis) -> None:
         """
         Initialize the rate limiter.
 

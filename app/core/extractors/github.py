@@ -7,6 +7,7 @@ including trending repositories, releases, and other relevant project informatio
 
 import hashlib
 from datetime import UTC, datetime
+from types import TracebackType
 
 import redis.asyncio as redis
 from loguru import logger
@@ -31,7 +32,7 @@ class GitHubExtractor(BaseExtractor):
         config: ExtractorConfig,
         http_client: RateLimitedClient | None = None,
         source_id: int | None = None,
-    ):
+    ) -> None:
         super().__init__(config)
         self.http_client = http_client or self.get_http_client()
         # Get GitHub token from configuration
@@ -81,7 +82,7 @@ class GitHubExtractor(BaseExtractor):
         Returns:
             A unique cache key for the URL
         """
-        url_hash = hashlib.sha1(url.encode()).hexdigest()
+        url_hash = hashlib.sha256(url.encode()).hexdigest()
         return f"github:etag:{url_hash}"
 
     async def _get_redis_client(self) -> redis.Redis:
@@ -368,14 +369,19 @@ class GitHubExtractor(BaseExtractor):
             logger.error(f"GitHub health check failed: {e}")
             return False
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the HTTP client."""
         await self.http_client.close()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "GitHubExtractor":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Async context manager exit."""
         await self.close()

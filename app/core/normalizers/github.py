@@ -48,9 +48,9 @@ class GitHubNormalizer(BaseNormalizer):
             return self._normalize_repository(raw_item)
 
         except KeyError as e:
-            raise NormalizationError(f"Missing required field: {e}", self._get_item_id(raw_item), e)
+            raise NormalizationError(f"Missing required field: {e}", self._get_item_id(raw_item)) from e
         except Exception as e:
-            raise NormalizationError(f"GitHub normalization failed: {e}", self._get_item_id(raw_item), e)
+            raise NormalizationError(f"GitHub normalization failed: {e}", self._get_item_id(raw_item)) from e
 
     def _normalize_repository(self, repo: dict[str, Any]) -> ContentItemCreate:
         """

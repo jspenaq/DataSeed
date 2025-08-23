@@ -23,7 +23,7 @@ class RateLimitedClient:
         max_keepalive_connections: int = 5,
         user_agent: str = "DataSeed/1.0",
         headers: dict[str, str] | None = None,
-    ):
+    ) -> None:
         """
         Initialize the rate-limited HTTP client.
 
@@ -210,16 +210,21 @@ class RateLimitedClient:
         logger.error(f"Failed to fetch {url} after {retries} attempts")
         return None
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the HTTP client."""
         if self.client:
             await self.client.aclose()
             self.client = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "RateLimitedClient":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
         """Async context manager exit."""
         await self.close()

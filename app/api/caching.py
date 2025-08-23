@@ -15,7 +15,7 @@ from app.models.items import ContentItem
 class CacheInfo:
     """Container for cache-related information."""
 
-    def __init__(self, etag: str, last_modified: datetime, should_return_304: bool = False):
+    def __init__(self, etag: str, last_modified: datetime, should_return_304: bool = False) -> None:
         self.etag = etag
         self.last_modified = last_modified
         self.should_return_304 = should_return_304
@@ -125,10 +125,8 @@ async def check_conditional_headers(request: Request, etag: str, last_modified: 
     """
     # Check If-None-Match header (ETag-based)
     if_none_match = request.headers.get("If-None-Match")
-    if if_none_match:
-        # Handle both quoted and unquoted ETags, and wildcard
-        if if_none_match == "*" or etag in if_none_match:
-            return True
+    if if_none_match and (if_none_match == "*" or etag in if_none_match):
+        return True
 
     # Check If-Modified-Since header (timestamp-based)
     if_modified_since = request.headers.get("If-Modified-Since")
@@ -188,7 +186,7 @@ async def cache_dependency(
     window = request.query_params.get("window")
     if window and request.url.path.endswith(("/stats", "/trending")):
         try:
-            from datetime import datetime, timedelta
+            # timedelta is already imported at the top
 
             from app.api.v1.items import _parse_window
 

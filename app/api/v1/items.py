@@ -32,12 +32,16 @@ async def get_items(
     ),
     q: str | None = Query(
         None,
-        description="Search query that matches against both item titles and content using case-insensitive partial matching",
+        description="Search query that matches against both item titles and content using case-insensitive "
+        "partial matching",
         examples=["artificial intelligence"],
     ),
     limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", examples=[20]),
     offset: int = Query(
-        0, ge=0, description="Number of items to skip from the beginning (for pagination)", examples=[0],
+        0,
+        ge=0,
+        description="Number of items to skip from the beginning (for pagination)",
+        examples=[0],
     ),
     db: AsyncSession = Depends(get_db),
     cache_info: CacheInfo = Depends(cache_dependency),
@@ -112,7 +116,8 @@ async def get_items(
     response_model=ContentItemCursorPage,
     summary="Get content items with cursor pagination",
     description="Retrieve content items using cursor-based pagination for better performance with large datasets. "
-    "The cursor encodes the position in the result set and provides consistent pagination even when new items are added.",
+    "The cursor encodes the position in the result set and provides consistent pagination even when new "
+    "items are added.",
 )
 async def get_items_cursor(
     response: Response,
@@ -123,12 +128,14 @@ async def get_items_cursor(
     ),
     q: str | None = Query(
         None,
-        description="Search query that matches against both item titles and content using case-insensitive partial matching",
+        description="Search query that matches against both item titles and content using case-insensitive "
+        "partial matching",
         examples=["machine learning"],
     ),
     cursor: str | None = Query(
         None,
-        description="Base64-encoded cursor for pagination. Use the 'next_cursor' from previous response to get the next page",
+        description="Base64-encoded cursor for pagination. Use the 'next_cursor' from previous response "
+        "to get the next page",
         examples=["MjAyNC0wMS0xNVQxMDozMDowMFo6MTIzNDU="],
     ),
     limit: int = Query(20, ge=1, le=100, description="Number of items to return per page", examples=[20]),
@@ -170,7 +177,8 @@ async def get_items_cursor(
     if cursor:
         try:
             cursor_published_at, cursor_id = decode_cursor(cursor)
-            # Cursor logic: WHERE (published_at < cursor_published_at) OR (published_at = cursor_published_at AND id < cursor_id)
+            # Cursor logic: WHERE (published_at < cursor_published_at) OR
+            # (published_at = cursor_published_at AND id < cursor_id)
             query = query.where(
                 or_(
                     ContentItem.published_at < cursor_published_at,
@@ -178,7 +186,7 @@ async def get_items_cursor(
                 ),
             )
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid cursor: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid cursor: {e}") from e
 
     # Order by published_at descending (most recent first), with id as tie-breaker
     query = query.order_by(ContentItem.published_at.desc(), ContentItem.id.desc())
@@ -270,7 +278,7 @@ async def get_items_stats(
     try:
         window_delta = _parse_window(window)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     window_start = datetime.utcnow() - window_delta
 
@@ -353,7 +361,8 @@ async def get_trending_items(
     limit: int = Query(20, ge=1, le=100, description="Maximum number of trending items to return", examples=[20]),
     use_hot_score: bool = Query(
         False,
-        description="Enable advanced hot score algorithm that balances item score with recency (PostgreSQL only, falls back to simple scoring on other databases)",
+        description="Enable advanced hot score algorithm that balances item score with recency "
+        "(PostgreSQL only, falls back to simple scoring on other databases)",
         examples=[False],
     ),
     db: AsyncSession = Depends(get_db),
@@ -391,7 +400,7 @@ async def get_trending_items(
     try:
         window_delta = _parse_window(window)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     window_start = datetime.utcnow() - window_delta
 

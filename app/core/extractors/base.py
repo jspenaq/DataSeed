@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
+from types import TracebackType
 from typing import Any, Protocol
 
 from pydantic import BaseModel
@@ -30,7 +31,7 @@ class ExtractorConfig(BaseModel):
 class BaseExtractor(ABC):
     """Abstract base class for all data extractors."""
 
-    def __init__(self, config: ExtractorConfig):
+    def __init__(self, config: ExtractorConfig) -> None:
         self.config = config
         self.base_url = config.base_url
         self.rate_limit = config.rate_limit
@@ -51,15 +52,21 @@ class BaseExtractor(ABC):
             timeout=client_config.get("timeout", 10.0),
         )
 
-    async def close(self):
+    @abstractmethod
+    async def close(self) -> None:
         """Close any resources used by the extractor."""
         pass
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "BaseExtractor":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Async context manager exit."""
         await self.close()
 

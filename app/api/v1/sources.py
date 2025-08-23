@@ -182,7 +182,7 @@ async def get_sources(
     status: str | None = Query(None, description="Filter by health status (healthy, degraded, failed)"),
     search: str | None = Query(None, description="Search sources by name"),
     db: AsyncSession = Depends(get_db),
-):
+) -> SourcesResponse:
     """
     Get all data sources with their statistics and health information.
 
@@ -190,7 +190,7 @@ async def get_sources(
     and basic configuration information.
     """
     # Build query
-    query = Source.__table__.select().where(Source.is_active == True)
+    query = Source.__table__.select().where(Source.is_active)
 
     if search:
         query = query.where(Source.name.ilike(f"%{search}%"))
@@ -243,7 +243,7 @@ async def get_source_details(
     source_id: int,
     runs_limit: int = Query(10, description="Number of recent runs to include"),
     db: AsyncSession = Depends(get_db),
-):
+) -> SourceDetailResponse:
     """
     Get detailed information for a specific source.
 

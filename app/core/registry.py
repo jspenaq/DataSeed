@@ -5,14 +5,19 @@ This module provides a centralized registry system that follows the Open/Closed 
 allowing new extractors and normalizers to be added without modifying existing factory code.
 """
 
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.extractors.base import BaseExtractor, ExtractorConfig
+    from app.core.normalizers.base import BaseNormalizer
 
 # Global registries for extractors and normalizers
-extractor_registry: dict[str, type[Any]] = {}
-normalizer_registry: dict[str, type[Any]] = {}
+extractor_registry: dict[str, type["BaseExtractor"]] = {}
+normalizer_registry: dict[str, type["BaseNormalizer"]] = {}
 
 
-def register_extractor(name: str):
+def register_extractor(name: str) -> Callable[[type["BaseExtractor"]], type["BaseExtractor"]]:
     """
     Decorator to register an extractor class in the global registry.
 
@@ -28,14 +33,14 @@ def register_extractor(name: str):
             pass
     """
 
-    def decorator(cls: type[Any]):
+    def decorator(cls: type["BaseExtractor"]) -> type["BaseExtractor"]:
         extractor_registry[name] = cls
         return cls
 
     return decorator
 
 
-def register_normalizer(name: str):
+def register_normalizer(name: str) -> Callable[[type["BaseNormalizer"]], type["BaseNormalizer"]]:
     """
     Decorator to register a normalizer class in the global registry.
 
@@ -51,14 +56,14 @@ def register_normalizer(name: str):
             pass
     """
 
-    def decorator(cls: type[Any]):
+    def decorator(cls: type["BaseNormalizer"]) -> type["BaseNormalizer"]:
         normalizer_registry[name] = cls
         return cls
 
     return decorator
 
 
-def get_extractor_class(name: str) -> type[Any]:
+def get_extractor_class(name: str) -> type["BaseExtractor"]:
     """
     Get an extractor class from the registry.
 
@@ -77,7 +82,7 @@ def get_extractor_class(name: str) -> type[Any]:
     return extractor_registry[name]
 
 
-def get_normalizer_class(name: str) -> type[Any]:
+def get_normalizer_class(name: str) -> type["BaseNormalizer"]:
     """
     Get a normalizer class from the registry.
 
@@ -117,14 +122,13 @@ def list_registered_normalizers() -> list[str]:
 
 
 # Factory functions for convenience
-def get_extractor(source_name: str, config, source_id: int | None = None) -> Any:
+def get_extractor(source_name: str, config: "ExtractorConfig") -> "BaseExtractor":
     """
     Factory function to get an extractor instance for a source.
 
     Args:
         source_name: Name of the data source
         config: ExtractorConfig instance for the extractor
-        source_id: Optional ID of the data source
 
     Returns:
         Configured extractor instance
@@ -133,12 +137,10 @@ def get_extractor(source_name: str, config, source_id: int | None = None) -> Any
         KeyError: If extractor is not found in registry
     """
     extractor_class = get_extractor_class(source_name.lower())
-    if source_id is not None:
-        return extractor_class(config, source_id=source_id)
     return extractor_class(config)
 
 
-def get_normalizer(source_name: str, source_id: int) -> Any:
+def get_normalizer(source_name: str, source_id: int) -> "BaseNormalizer":
     """
     Factory function to get a normalizer instance for a source.
 
@@ -158,5 +160,7 @@ def get_normalizer(source_name: str, source_id: int) -> Any:
         try:
             normalizer_class = get_normalizer_class("generic")
             return normalizer_class(source_id)
-        except KeyError:
-            raise KeyError(f"No normalizer found for source '{source_name}' and no generic normalizer available")
+        except KeyError as generic_err:
+            raise KeyError(
+                f"No normalizer found for source '{source_name}' and no generic normalizer available",
+            ) from generic_err

@@ -13,7 +13,7 @@ from app.core.registry import register_extractor
 class HackerNewsExtractor(BaseExtractor):
     """HackerNews API extractor using httpx for async operations."""
 
-    def __init__(self, config: ExtractorConfig, http_client: RateLimitedClient | None = None):
+    def __init__(self, config: ExtractorConfig, http_client: RateLimitedClient | None = None) -> None:
         super().__init__(config)
         self.http_client = http_client or self.get_http_client()
         # Add user agent to the client if not provided
@@ -60,7 +60,7 @@ class HackerNewsExtractor(BaseExtractor):
         # Cast to List[Any] to satisfy type checker, then process
         story_list = cast("list[Any]", data)
         limited_data = story_list[:limit]
-        story_ids = [int(item_id) for item_id in limited_data if isinstance(item_id, (int, str))]
+        story_ids = [int(item_id) for item_id in limited_data if isinstance(item_id, int | str)]
         logger.info(f"Retrieved {len(story_ids)} story IDs")
         return story_ids
 
@@ -112,7 +112,7 @@ class HackerNewsExtractor(BaseExtractor):
                 logger.warning(f"Title is not a string for item {item_id}")
                 return None
 
-            if not isinstance(timestamp, (int, float)):
+            if not isinstance(timestamp, int | float):
                 logger.warning(f"Timestamp is not a number for item {item_id}")
                 return None
 
@@ -214,14 +214,19 @@ class HackerNewsExtractor(BaseExtractor):
             logger.error(f"HackerNews health check failed: {e}")
             return False
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the HTTP client."""
         await self.http_client.close()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "HackerNewsExtractor":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
         """Async context manager exit."""
         await self.close()

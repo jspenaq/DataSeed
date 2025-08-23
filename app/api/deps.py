@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+import redis.asyncio as redis
 from fastapi import Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def rate_limiter_dependency(request: Request, response: Response, redis_client=Depends(get_redis_client)) -> None:
+async def rate_limiter_dependency(
+    request: Request,
+    response: Response,
+    redis_client: redis.Redis = Depends(get_redis_client),
+) -> None:
     """
     FastAPI dependency for rate limiting using token-bucket algorithm.
 

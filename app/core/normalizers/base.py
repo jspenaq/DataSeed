@@ -1,10 +1,12 @@
+import re
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from app.core.extractors.base import RawItem
+from app.core.registry import register_normalizer
 from app.schemas.items import ContentItemCreate
 
 # Type variables for generic normalizer
@@ -15,17 +17,17 @@ OutputType = TypeVar("OutputType", bound=BaseModel)
 class NormalizationError(Exception):
     """Exception raised when normalization fails."""
 
-    def __init__(self, message: str, item_id: str | None = None, original_error: Exception | None = None):
+    def __init__(self, message: str, item_id: str | None = None, original_error: Exception | None = None) -> None:
         self.message = message
         self.item_id = item_id
         self.original_error = original_error
         super().__init__(self.message)
 
 
-class BaseNormalizer(ABC, Generic[InputType, OutputType]):
+class BaseNormalizer[InputType: BaseModel, OutputType: BaseModel](ABC):
     """Abstract base class for data normalizers."""
 
-    def __init__(self, source_id: int):
+    def __init__(self, source_id: int) -> None:
         self.source_id = source_id
 
     @abstractmethod
@@ -88,8 +90,6 @@ class BaseNormalizer(ABC, Generic[InputType, OutputType]):
         cleaned = text.strip().replace("\r\n", "\n").replace("\r", "\n")
 
         # Remove excessive whitespace
-        import re
-
         cleaned = re.sub(r"\s+", " ", cleaned)
 
         return cleaned if cleaned else None
@@ -114,8 +114,6 @@ class BaseNormalizer(ABC, Generic[InputType, OutputType]):
             url = "https://" + url
 
         # Basic URL validation - more permissive pattern
-        import re
-
         url_pattern = re.compile(
             r"^https?://"  # http:// or https://
             r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,}\.?|"  # domain (allow longer TLDs)
@@ -131,10 +129,6 @@ class BaseNormalizer(ABC, Generic[InputType, OutputType]):
 
         logger.warning(f"Invalid URL format: {url}")
         return None
-
-
-# Import here to avoid circular imports
-from app.core.registry import register_normalizer
 
 
 @register_normalizer("default")
@@ -193,8 +187,8 @@ class ContentNormalizer(BaseNormalizer[RawItem, ContentItemCreate]):
             )
 
         except ValidationError as e:
-            raise NormalizationError(f"Validation error: {e}", raw_item.external_id, e)
+            raise NormalizationError(f"Validation error: {e}", raw_item.external_id, e) from e
         except NormalizationError:
             raise
         except Exception as e:
-            raise NormalizationError(f"Unexpected error during normalization: {e}", raw_item.external_id, e)
+            raise NormalizationError(f"Unexpected error during normalization: {e}", raw_item.external_id, e) from e

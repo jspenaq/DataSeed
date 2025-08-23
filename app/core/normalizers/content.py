@@ -30,14 +30,12 @@ class HackerNewsNormalizer(ContentNormalizer):
             normalized_item = super().normalize(raw_item)
 
             # Apply HackerNews-specific transformations
-            normalized_item = self._apply_hackernews_transformations(normalized_item, raw_item)
-
-            return normalized_item
+            return self._apply_hackernews_transformations(normalized_item, raw_item)
 
         except NormalizationError:
             raise
         except Exception as e:
-            raise NormalizationError(f"HackerNews normalization failed: {e}", raw_item.external_id, e)
+            raise NormalizationError(f"HackerNews normalization failed: {e}", raw_item.external_id, e) from e
 
     def _apply_hackernews_transformations(
         self,
@@ -228,14 +226,12 @@ class RedditNormalizer(ContentNormalizer):
             normalized_item = super().normalize(raw_item)
 
             # Apply Reddit-specific transformations
-            normalized_item = self._apply_reddit_transformations(normalized_item, raw_item)
-
-            return normalized_item
+            return self._apply_reddit_transformations(normalized_item, raw_item)
 
         except NormalizationError:
             raise
         except Exception as e:
-            raise NormalizationError(f"Reddit normalization failed: {e}", raw_item.external_id, e)
+            raise NormalizationError(f"Reddit normalization failed: {e}", raw_item.external_id, e) from e
 
     def _apply_reddit_transformations(
         self,
@@ -318,14 +314,12 @@ class ProductHuntNormalizer(ContentNormalizer):
             normalized_item = super().normalize(raw_item)
 
             # Apply ProductHunt-specific transformations
-            normalized_item = self._apply_producthunt_transformations(normalized_item, raw_item)
-
-            return normalized_item
+            return self._apply_producthunt_transformations(normalized_item, raw_item)
 
         except NormalizationError:
             raise
         except Exception as e:
-            raise NormalizationError(f"ProductHunt normalization failed: {e}", raw_item.external_id, e)
+            raise NormalizationError(f"ProductHunt normalization failed: {e}", raw_item.external_id, e) from e
 
     def _apply_producthunt_transformations(
         self,
