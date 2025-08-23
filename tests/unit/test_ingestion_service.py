@@ -5,7 +5,7 @@ Tests the core persistence functionality including batch upserts,
 ingestion run tracking, and error handling.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -54,7 +54,7 @@ class TestIngestionService:
                 content="Test content 1",
                 url="https://example.com/1",
                 score=100,
-                published_at=datetime.utcnow(),
+                published_at=datetime.now(UTC),
             ),
             ContentItemCreate(
                 source_id=1,
@@ -63,7 +63,7 @@ class TestIngestionService:
                 content="Test content 2",
                 url="https://example.com/2",
                 score=200,
-                published_at=datetime.utcnow(),
+                published_at=datetime.now(UTC),
             ),
         ]
 
@@ -105,7 +105,7 @@ class TestIngestionService:
     async def test_create_ingestion_run_success(self, ingestion_service, mock_db_session):
         """Test successful creation of ingestion run."""
         source_id = 1
-        started_at = datetime.utcnow()
+        started_at = datetime.now(UTC)
 
         # Mock the created run
         mock_run = IngestionRun(id=1, source_id=source_id, started_at=started_at, status="started")
@@ -133,7 +133,7 @@ class TestIngestionService:
         run_id = 1
 
         # Mock existing run
-        mock_run = IngestionRun(id=run_id, source_id=1, started_at=datetime.utcnow(), status="started")
+        mock_run = IngestionRun(id=run_id, source_id=1, started_at=datetime.now(UTC), status="started")
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_run
@@ -170,7 +170,7 @@ class TestIngestionService:
         upsert_stats = {"new": 80, "updated": 20, "failed": 0}
 
         # Mock existing run
-        mock_run = IngestionRun(id=run_id, source_id=1, started_at=datetime.utcnow(), status="started")
+        mock_run = IngestionRun(id=run_id, source_id=1, started_at=datetime.now(UTC), status="started")
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_run
@@ -195,7 +195,7 @@ class TestIngestionService:
         upsert_stats = {"new": 70, "updated": 20, "failed": 10}
 
         # Mock existing run
-        mock_run = IngestionRun(id=run_id, source_id=1, started_at=datetime.utcnow(), status="started")
+        mock_run = IngestionRun(id=run_id, source_id=1, started_at=datetime.now(UTC), status="started")
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_run
@@ -218,8 +218,8 @@ class TestIngestionService:
         """Test querying ingestion runs with filters."""
         # Mock query results
         mock_runs = [
-            IngestionRun(id=1, source_id=1, started_at=datetime.utcnow()),
-            IngestionRun(id=2, source_id=1, started_at=datetime.utcnow()),
+            IngestionRun(id=1, source_id=1, started_at=datetime.now(UTC)),
+            IngestionRun(id=2, source_id=1, started_at=datetime.now(UTC)),
         ]
 
         mock_result = MagicMock()
@@ -234,7 +234,7 @@ class TestIngestionService:
 
     async def test_get_latest_ingestion_run(self, ingestion_service, mock_db_session):
         """Test getting the latest ingestion run for a source."""
-        mock_run = IngestionRun(id=1, source_id=1, started_at=datetime.utcnow(), status="completed")
+        mock_run = IngestionRun(id=1, source_id=1, started_at=datetime.now(UTC), status="completed")
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_run
@@ -312,24 +312,27 @@ class TestIngestionService:
 class TestIngestionRunModel:
     """Test suite for IngestionRun model properties."""
 
-    def test_duration_seconds_completed(self):
+    @pytest.mark.asyncio
+    async def test_duration_seconds_completed(self):
         """Test duration calculation for completed run."""
-        started = datetime.utcnow()
+        started = datetime.now(UTC)
         completed = started + timedelta(seconds=120)
 
         run = IngestionRun(source_id=1, started_at=started, completed_at=completed, status="completed")
 
         assert run.duration_seconds == 120.0
 
-    def test_duration_seconds_not_completed(self):
+    @pytest.mark.asyncio
+    async def test_duration_seconds_not_completed(self):
         """Test duration calculation for incomplete run."""
-        run = IngestionRun(source_id=1, started_at=datetime.utcnow(), status="started")
+        run = IngestionRun(source_id=1, started_at=datetime.now(UTC), status="started")
 
         assert run.duration_seconds is None
 
-    def test_is_running_property(self):
+    @pytest.mark.asyncio
+    async def test_is_running_property(self):
         """Test is_running property for different statuses."""
-        run = IngestionRun(source_id=1, started_at=datetime.utcnow())
+        run = IngestionRun(source_id=1, started_at=datetime.now(UTC))
 
         run.status = "started"
         assert run.is_running is True
@@ -343,9 +346,10 @@ class TestIngestionRunModel:
         run.status = "failed"
         assert run.is_running is False
 
-    def test_is_completed_property(self):
+    @pytest.mark.asyncio
+    async def test_is_completed_property(self):
         """Test is_completed property."""
-        run = IngestionRun(source_id=1, started_at=datetime.utcnow())
+        run = IngestionRun(source_id=1, started_at=datetime.now(UTC))
 
         run.status = "completed"
         assert run.is_completed is True
@@ -353,9 +357,10 @@ class TestIngestionRunModel:
         run.status = "started"
         assert run.is_completed is False
 
-    def test_is_failed_property(self):
+    @pytest.mark.asyncio
+    async def test_is_failed_property(self):
         """Test is_failed property."""
-        run = IngestionRun(source_id=1, started_at=datetime.utcnow())
+        run = IngestionRun(source_id=1, started_at=datetime.now(UTC))
 
         run.status = "failed"
         assert run.is_failed is True

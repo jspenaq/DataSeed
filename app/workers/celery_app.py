@@ -78,6 +78,14 @@ celery_app.conf.update(
     task_track_started=True,
 )
 
+# Configure Celery Beat schedule for periodic tasks
+celery_app.conf.beat_schedule = {
+    "schedule-all-sources": {
+        "task": "schedule.all_sources",
+        "schedule": 900.0,  # Every 15 minutes (900 seconds)
+    },
+}
+
 # Import tasks to ensure they are registered with Celery
 # This import must be after the celery_app is created to avoid circular imports
 # pylint: disable=wrong-import-position

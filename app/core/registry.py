@@ -117,13 +117,14 @@ def list_registered_normalizers() -> list[str]:
 
 
 # Factory functions for convenience
-def get_extractor(source_name: str, config) -> Any:
+def get_extractor(source_name: str, config, source_id: int | None = None) -> Any:
     """
     Factory function to get an extractor instance for a source.
 
     Args:
         source_name: Name of the data source
         config: ExtractorConfig instance for the extractor
+        source_id: Optional ID of the data source
 
     Returns:
         Configured extractor instance
@@ -132,6 +133,8 @@ def get_extractor(source_name: str, config) -> Any:
         KeyError: If extractor is not found in registry
     """
     extractor_class = get_extractor_class(source_name.lower())
+    if source_id is not None:
+        return extractor_class(config, source_id=source_id)
     return extractor_class(config)
 
 
